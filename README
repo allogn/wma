@@ -1,0 +1,4 @@
+Library linkage:
+1. configure igraph by
+    ./configure --prefix=<absolute path>
+2. link library in cmake
