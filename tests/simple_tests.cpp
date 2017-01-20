@@ -92,3 +92,22 @@ BOOST_AUTO_TEST_CASE (visitor)
     delete v;
 
 }
+
+BOOST_AUTO_TEST_CASE (distanceTest) {
+    RoadNetwork r;
+    Visitor v;
+    Tags tags;
+    //check distance between aalborg and klarup
+    //https://www.distancecalculator.net/from-aalborg-to-copenhagen
+    v.node_callback(0, 57.048, 9.9187, tags); //Aalborg
+    v.node_callback(1, 57.011564, 10.053957, tags); //Klarup
+    std::vector<uint64_t > edge({0,1});
+    v.way_callback(0, tags, edge);
+    v.set_graph(&r.graph);
+    r.transform_coordinates();
+    BOOST_CHECK(VAN(&r.graph,"X",1) == 0);
+    BOOST_CHECK(VAN(&r.graph,"Y",0) == 0);
+    r.make_weights();
+    igraph_real_t dist = EAN(&r.graph, "weights", 0);
+    BOOST_CHECK_CLOSE_FRACTION(dist, 9025, 1);
+}

@@ -76,7 +76,7 @@ public:
 
         igraph_add_edges(gp, &edges, 0);
         igraph_cattribute_VAN_setv(gp, "lat", &node_lat);
-        igraph_cattribute_VAN_setv(gp, "lng", &node_lon);
+        igraph_cattribute_VAN_setv(gp, "lon", &node_lon);
         igraph_cattribute_EAN_setv(gp, "osmid", &edge_ids);
         igraph_cattribute_VAN_setv(gp, "osmid", &nodes);
     }
