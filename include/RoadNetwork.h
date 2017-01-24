@@ -92,7 +92,7 @@ public:
         igraph_vector_t weights;
         igraph_vector_init(&weights, igraph_ecount(&graph));
 
-        for(uint64_t i = 0; i < igraph_ecount(&graph); i++) {
+        cilk_for(uint64_t i = 0; i < igraph_ecount(&graph); i++) {
             igraph_integer_t from;
             igraph_integer_t to;
             igraph_edge(&graph, i, &from, &to);
