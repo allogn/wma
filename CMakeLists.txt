@@ -37,11 +37,15 @@ include_directories(${PROTOBUF_INCLUDE_DIR})
 # setting executables
 file(GLOB SOURCE_FILES src/*.cpp)
 file(GLOB TEST_SOURCE_FILES tests/*.cpp)
+file(GLOB SIA_TEST_SOURCE_FILES tests/*.cpp)
 
 add_executable(fcla main.cpp ${SOURCE_FILES})
 target_link_libraries(fcla ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
 
-add_executable(test_all ${TEST_SOURCE_FILES})
-target_link_libraries(test_all ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
+add_executable(simple_tests tests/simple_tests.cpp)
+target_link_libraries(simple_tests ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
+
+add_executable(SIA_tests tests/SIA_tests.cpp)
+target_link_libraries(SIA_tests ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};)
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

@@ -106,7 +106,7 @@ public:
             igraph_vector_set(&weights, i, res);
         }
 
-        igraph_cattribute_EAN_setv(&graph, "weights", &weights);
+        igraph_cattribute_EAN_setv(&graph, "weight", &weights);
     }
 
     bool test_testing() {
