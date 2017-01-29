@@ -1,0 +1,5 @@
+#! /bin/sh
+test "${ZSH_VERSION+set}" = set && alias -g '${1+"$@"}'='"$@"'
+cd '/Users/alvis/PhD/fcla/lib/igraph-0.7.1/tests'
+exec ${CONFIG_SHELL-/bin/sh} "/Users/alvis/PhD/fcla/lib/igraph-0.7.1/tests/testsuite" -v -d  25 ${1+"$@"}
+exit 1

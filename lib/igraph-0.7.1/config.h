@@ -23,7 +23,7 @@
 #define HAVE_GLPK 1
 
 /* Define to 1 if you have the GMP library */
-/* #undef HAVE_GMP */
+#define HAVE_GMP 1
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
@@ -140,8 +140,7 @@
 /* Define to 1 if you use the internal LAPACK library */
 #define INTERNAL_LAPACK 1
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
 
 /* Name of package */
@@ -176,4 +175,4 @@
 
 /* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
    `char[]'. */
-/* #undef YYTEXT_POINTER */
+#define YYTEXT_POINTER 1

@@ -1,11 +1,12 @@
 #!/bin/bash
-export $FCLA_ROOT=$PWD
+export FCLA_ROOT=$PWD
 
+# @TODO there is a problem with make install in macOS, using brew install
 # igraph Library
-cd $FCLA_ROOT/lib/igraph-0.7.1/
-./configure --prefix=$FCLA_ROOT/lib/igraph-0.7.1/build
-make
-make install
+#cd $FCLA_ROOT/lib/igraph-0.7.1/
+#./configure --prefix=$FCLA_ROOT/lib/igraph-0.7.1/build
+#make
+#make install
 
 
 # OSM-binary

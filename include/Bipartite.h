@@ -8,6 +8,8 @@
 
 #include <stack>
 #include <algorithm>
+#include <igraph/igraph.h>
+#include <float.h>
 
 class Bipartite {
 public:
@@ -83,7 +85,7 @@ public:
         igraph_vector_t weights;
         igraph_integer_t esize = igraph_ecount(&bigraph);
         igraph_vector_init(&weights, esize);
-        cilk_for (igraph_integer_t i = 0; i < esize; i++) {
+        for (igraph_integer_t i = 0; i < esize; i++) {
             igraph_vector_set(&weights, i, igraph_rng_get_unif01(&rng));
         }
         igraph_cattribute_EAN_setv(&bigraph, "weight", &weights);

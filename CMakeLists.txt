@@ -1,13 +1,13 @@
 cmake_minimum_required(VERSION 3.5)
 project(fcla)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fcilkplus")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ligraph")
 
 include_directories(${CMAKE_SOURCE_DIR}/include/)
 
 # BOOST libraries
 find_package(Boost REQUIRED)
-if (ZLIB_FOUND)
+if (Boost_FOUND)
     include_directories(${Boost_INCLUDE_DIR})
 endif()
 
@@ -16,9 +16,11 @@ endif()
 #find_package (Boost COMPONENTS REQUIRED chrono filesystem)
 
 # include igraph
-set(IGRAPH_BUILD_PATH ${CMAKE_SOURCE_DIR}/lib/igraph-0.7.1/build/)
-set(IGRAPH_LINK_LIBS ${IGRAPH_BUILD_PATH}/lib/libigraph.so)
-include_directories(${IGRAPH_BUILD_PATH}/include/)
+#set(IGRAPH_BUILD_PATH ${CMAKE_SOURCE_DIR}/lib/igraph-0.7.1/build/)
+#set(IGRAPH_LINK_LIBS ${IGRAPH_BUILD_PATH}/lib/libigraph.so)
+#include_directories(${IGRAPH_BUILD_PATH}/include/)
+#include_directories()
+#set(IGRAPH_INCLUDE_DIR)
 
 # include pbf reader
 include_directories(${CMAKE_SOURCE_DIR}/lib/OSM-binary/build/include)

@@ -6,27 +6,26 @@
 #define FCLA_SIA_H
 
 #include <string>
-#include "igraph/igraph.h"
+#include <igraph/igraph.h>
 #include "nheap.h"
 
 namespace SIA {
 
-    typedef long large_int_t;
     long INF = LONG_MAX;
     typedef struct {
         std::string message = "There is no path in a bipartite graph from a source node to a non-full target node";
     } NO_PATH_ERROR;
-    typedef fHeap<large_int_t> mmHeap;
+    typedef fHeap<long> mmHeap;
 
     /*
      * Get Cost of an Edge according to potential values of vertices
      *
      * input: vtype is an indicator which subset a vertex belongs to
      */
-    inline large_int_t edgeCost(igraph_bool_t source_vtype,
-                                large_int_t weight,
-                                large_int_t source_potential,
-                                large_int_t target_potential)
+    inline long edgeCost(igraph_bool_t source_vtype,
+                         long weight,
+                         long source_potential,
+                         long target_potential)
     {
         if (source_vtype) weight = -weight; //invert weight of an edge if edge has an opposite direction
         return weight - source_potential + target_potential;
@@ -35,9 +34,9 @@ namespace SIA {
     /*
      * Get enheaped cost of an edge
      */
-    inline large_int_t heapedCost(large_int_t edge_w,
-                                    large_int_t source_potential, //potential of source node of an edge
-                                    large_int_t source_mindist) // minimum distance to a source node
+    inline long heapedCost(long edge_w,
+                           long source_potential, //potential of source node of an edge
+                           long source_mindist) // minimum distance to a source node
     {
         return source_mindist + edge_w - source_potential;
     }
@@ -47,9 +46,9 @@ namespace SIA {
      */
     inline bool updateMindist(igraph_vector_long_t* mindist,
                               igraph_integer_t v_id,
-                              large_int_t new_distance)
+                              long new_distance)
     {
-        large_int_t cur_dist = igraph_vector_long_e(mindist, v_id);
+        long cur_dist = igraph_vector_long_e(mindist, v_id);
         if (cur_dist > new_distance) {
             igraph_vector_long_set(mindist, v_id, new_distance);
             return true;
@@ -60,11 +59,11 @@ namespace SIA {
     /*
      * Check if a node has reached its capacity
      */
-    inline bool isFull(igraph_t* bigraph, igraph_integer_t vid, large_int_t capacity) {
+    inline bool isFull(igraph_t* bigraph, igraph_integer_t vid, long capacity) {
         igraph_vector_t res;
         igraph_vector_init(&res,1);
         igraph_degree(bigraph, &res, igraph_vss_1(vid), IGRAPH_OUT, false);
-        return capacity - VECTOR(res)[0] > 0;
+        return VECTOR(res)[0] - capacity > 0; //IS full
     }
 
     /*
@@ -141,7 +140,7 @@ namespace SIA {
                               igraph_vector_bool_t* types,
                               igraph_vector_long_t* potentials,
                               igraph_vector_long_t* weights,
-                              igraph_vector_int_t* backtrack //store ids of an ancestor in a dijkstra tree
+                              igraph_vector_t* backtrack //store ids of an ancestor in a dijkstra tree
     )
     {
         long current_node; //must be of type "long" instead "igraph_integer_t". Otherwise change mmHeap type (idx is always of long type)
@@ -149,10 +148,9 @@ namespace SIA {
         {
             //if current node is of second type and is not full - return it
             //the degree of outgoing edges is how many customers the service is matched with
-            if (VECTOR(*types)[current_node] && !isFull(bigraph,current_node,VECTOR(*capacities)[current_node])) {
+            if ((VECTOR(*types)[current_node]) && (!isFull(bigraph,current_node,VECTOR(*capacities)[current_node]))) {
                 return current_node;
             }
-
             //update minimum distances to all neighbors
             igraph_vector_t eids;
             igraph_vector_init(&eids,0);
@@ -161,13 +159,14 @@ namespace SIA {
                 igraph_integer_t eid = VECTOR(eids)[i];
                 igraph_integer_t target_node, source_node;
                 igraph_edge(bigraph,eid,&source_node,&target_node);
-                large_int_t new_cost = edgeCost(VECTOR(*types)[source_node],
-                                                  VECTOR(*weights)[eid],
-                                                  VECTOR(*potentials)[source_node],
-                                                  VECTOR(*potentials)[target_node]);
+                long new_cost = VECTOR(*mindist)[source_node];
+                new_cost += edgeCost(VECTOR(*types)[source_node],
+                                     VECTOR(*weights)[eid],
+                                     VECTOR(*potentials)[source_node],
+                                     VECTOR(*potentials)[target_node]);
                 if (updateMindist(mindist, target_node, new_cost)) {
                     //update tree
-                    igraph_vector_int_set(backtrack, target_node, source_node);
+                    igraph_vector_set(backtrack, target_node, source_node);
                     //update or enqueue target node
                     dheap->updateorenqueue(target_node, new_cost);
                 }
@@ -201,11 +200,11 @@ namespace SIA {
     /*
      * Initialize vectors and variables for Dijkstra
      */
-    void init_dijsktra(large_int_t vcount,
+    void init_dijsktra(long vcount,
                        mmHeap* dheap,
                        igraph_vector_long_t* mindist,
                        igraph_vector_long_t* potentials,
-                       igraph_vector_long_t* backtrack,
+                       igraph_vector_t* backtrack,
                        igraph_integer_t source_id)
     {
         //initialize heaps and vectors according to a source node
@@ -216,14 +215,14 @@ namespace SIA {
         igraph_vector_long_init(potentials, vcount);
         igraph_vector_long_null(potentials); //init potentials with zero
 
-        igraph_vector_long_init(backtrack, vcount);
-        igraph_vector_long_fill(backtrack, -1); //init backtrack with -1 and itself for source
-        igraph_vector_long_set(backtrack, source_id, source_id);
+        igraph_vector_init(backtrack, vcount);
+        igraph_vector_fill(backtrack, -1); //init backtrack with -1 and itself for source
+        igraph_vector_set(backtrack, source_id, source_id);
 
         igraph_vector_long_init(potentials, vcount);
 
         //enqueue first node into Dijktra heap
-        dheap.enqueue(source_id, 0);
+        dheap->enqueue(source_id, 0);
     }
 
     /*
@@ -232,65 +231,66 @@ namespace SIA {
      * In fact there is one continuous Dijkstra execution that is iteratively terminated
      * or started depending on current results and a stream of new edges
      */
-    void match_vertex(igraph_t* bipartite, //residual bipartite graph
-                      igraph_vector_long_t capacities,
-                      igraph_integer_t source_id,
-                      large_int_t (*get_nn_weight)(igraph_integer_t), //callback that returns weight of nearest vertex
-                      igraph_integer_t (*get_nn)(igraph_integer_t), //callback that returns id of nearest vertex
-                      void (*pop_nn)(igraph_integer_t) //callback that pops nearest neighbor
-    )
-    {
-        large_int_t vcount = igraph_vcount(bipartite);
-
-        //init heaps
-        mmHeap gheap; //global heap stores information of the next not-added neighbor of vertices
-        mmHeap dheap; //heap used in Dijkstra
-
-        igraph_vector_long_t mindist; //minimum distance in Dijstra execution
-        igraph_vector_long_t potentials;
-        igraph_vector_long_t backtrack; //ids of ancestor in Dijkstra tree
-        init_dijsktra(vcount, &dheap, &mindist, &potentials, &backtrack, source_id);
-
-//        igraph_vector_bool_t visited; //visited nodes in Dijkstra execution
-
-        large_int_t source_nn_weight = get_nn(source_id);
-        //bipartite may not be empty, so there may not be additional outgoing edges for a feasible problem
-        if (source_nn_weight != -1) gheap.enqueue(source_id, heapedCost(source_nn_weight, 0, 0));
-
-
-        //@todo what is visited/watched for??
-
-//        long target_node = -1;
-//        watched[source_id] = 1;
-
-        //while we have not found a non-full service - run Dijkstra and check for a threshold
-        igraph_integer_t target_id = -1;
-        while (target_id == -1) {
-            //run Dijkstra
-            target_id = dijkstra(bigraph,dheap,mindist,capacities,types,potentials,backtrack);
-            //@todo update gheap for each visited node
-            //            heap_checkAndUpdateEdgeMin(globalH,current_node);
-            //            watched[current_node] = true;
-
-            //if current residual graph is full, then return target_id or exception
-            //@todo check that there can not be any neightbors of type B nodes
-            if (target_id == -1) {
-                if (!addNewEdge()) {
-                    throw NO_PATH_ERROR;
-                }
-            } else {
-                large_int_t sp_length = VECTOR(mindist)[target_id];
-                if (sp_length < gheap.getTopValue() && addNewEdge()) {
-                    target_id = -1; //invalidate result if new edge is added, otherwise return current result
-                }
-            }
-        }
-        augmentFlow(target_node);
-        raisePotentials();
-
-        //raise potentials and clear everything after iteration
-//        iteration_reset(target_node);
-    }
+//    void match_vertex(igraph_t* bigraph, //residual bipartite graph
+//                      igraph_vector_bool_t* types,
+//                      igraph_vector_long_t* capacities,
+//                      igraph_integer_t source_id,
+//                      large_int_t (*get_nn_weight)(igraph_integer_t), //callback that returns weight of nearest vertex
+//                      igraph_integer_t (*get_nn)(igraph_integer_t), //callback that returns id of nearest vertex
+//                      void (*pop_nn)(igraph_integer_t) //callback that pops nearest neighbor
+//    )
+//    {
+//        large_int_t vcount = igraph_vcount(bigraph);
+//
+//        //init heaps
+//        mmHeap gheap; //global heap stores information of the next not-added neighbor of vertices
+//        mmHeap dheap; //heap used in Dijkstra
+//
+//        igraph_vector_long_t mindist; //minimum distance in Dijstra execution
+//        igraph_vector_long_t potentials;
+//        igraph_vector_long_t backtrack; //ids of ancestor in Dijkstra tree
+//        init_dijsktra(vcount, &dheap, &mindist, &potentials, &backtrack, source_id);
+//
+////        igraph_vector_bool_t visited; //visited nodes in Dijkstra execution
+//
+//        large_int_t source_nn_weight = get_nn(source_id);
+//        //bipartite may not be empty, so there may not be additional outgoing edges for a feasible problem
+//        if (source_nn_weight != -1) gheap.enqueue(source_id, heapedCost(source_nn_weight, 0, 0));
+//
+//
+//        //@todo what is visited/watched for??
+//
+////        long target_node = -1;
+////        watched[source_id] = 1;
+//
+//        //while we have not found a non-full service - run Dijkstra and check for a threshold
+//        igraph_integer_t target_id = -1;
+//        while (target_id == -1) {
+//            //run Dijkstra
+//            target_id = dijkstra(bigraph,dheap,mindist,capacities,types,potentials,backtrack);
+//            //@todo update gheap for each visited node
+//            //            heap_checkAndUpdateEdgeMin(globalH,current_node);
+//            //            watched[current_node] = true;
+//
+//            //if current residual graph is full, then return target_id or exception
+//            //@todo check that there can not be any neightbors of type B nodes
+//            if (target_id == -1) {
+//                if (!addNewEdge()) {
+//                    throw NO_PATH_ERROR;
+//                }
+//            } else {
+//                large_int_t sp_length = VECTOR(mindist)[target_id];
+//                if (sp_length < gheap.getTopValue() && addNewEdge()) {
+//                    target_id = -1; //invalidate result if new edge is added, otherwise return current result
+//                }
+//            }
+//        }
+//        augmentFlow(target_node);
+//        raisePotentials();
+//
+//        //raise potentials and clear everything after iteration
+////        iteration_reset(target_node);
+//    }
 
 
 //

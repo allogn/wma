@@ -1,4 +1,4 @@
-prefix=/home/allogn/PhD/fcla/lib/igraph-0.7.1/build
+prefix=/Users/alvis/PhD/fcla/lib/igraph-0.7.1/lib/igraph-0.7.1/build
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include
@@ -8,5 +8,5 @@ Description: A library for creating and manipulating graphs
 Version: 0.7.1
 URL: http://igraph.org
 Libs: -L${libdir} -ligraph
-Libs.private: -lxml2 -lz -lm
+Libs.private: -lxml2 -lz -lm -lgmp
 Cflags: -I${includedir}/igraph

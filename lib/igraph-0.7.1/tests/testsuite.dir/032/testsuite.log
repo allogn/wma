@@ -1,0 +1,15 @@
+#                             -*- compilation -*-
+32. types.at:181: testing Another sparse matrix (igraph_spmatrix_t):  ...
+./types.at:183: $CC ${abs_top_srcdir}/examples/simple/spmatrix.c -I${abs_top_srcdir}/include -I${abs_top_builddir}/include -L${abs_top_builddir}/src/.libs -ligraph -lm  -o itest
+--- /dev/null	2017-01-29 10:53:15.438275000 +0100
++++ /Users/alvis/PhD/fcla/lib/igraph-0.7.1/tests/testsuite.dir/at-groups/32/stderr	2017-01-29 10:53:16.000000000 +0100
+@@ -0,0 +1,8 @@
++/Users/alvis/PhD/fcla/lib/igraph-0.7.1/examples/simple/spmatrix.c:195:11: warning: absolute value function 'abs' given an argument of type 'long' but has parameter of type 'int' which may cause truncation of value [-Wabsolute-value]
++      if (abs(i-j) == 1)
++          ^
++/Users/alvis/PhD/fcla/lib/igraph-0.7.1/examples/simple/spmatrix.c:195:11: note: use function 'labs' instead
++      if (abs(i-j) == 1)
++          ^~~
++          labs
++1 warning generated.
+32. types.at:181: 32. Another sparse matrix (igraph_spmatrix_t):  (types.at:181): FAILED (types.at:183)

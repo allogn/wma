@@ -9,7 +9,7 @@
 #include <cilk/cilk.h>
 
 #include "helpers.h"
-#include "igraph/igraph.h"
+#include <igraph/igraph.h>
 #include "osmpbfreader.h"
 #include "Visitor.h"
 
@@ -72,7 +72,7 @@ public:
         double_t min_lon = static_cast<double_t>(igraph_vector_min(&all_lon));
 
         //calculate new coords in parallel, hope for optimization
-        cilk_for(uint64_t i = 0; i < static_cast<uint64_t >(graph_size); i++) {
+        for(uint64_t i = 0; i < static_cast<uint64_t >(graph_size); i++) {
             double_t lat = static_cast<double_t>(igraph_vector_e(&all_lat, i));
             double_t lon = static_cast<double_t>(igraph_vector_e(&all_lon, i));
             std::pair<double_t, double_t> new_coords = get_euclidean(min_lat, min_lon, lat, lon);
@@ -92,7 +92,7 @@ public:
         igraph_vector_t weights;
         igraph_vector_init(&weights, igraph_ecount(&graph));
 
-        cilk_for(uint64_t i = 0; i < igraph_ecount(&graph); i++) {
+        for(uint64_t i = 0; i < igraph_ecount(&graph); i++) {
             igraph_integer_t from;
             igraph_integer_t to;
             igraph_edge(&graph, i, &from, &to);
