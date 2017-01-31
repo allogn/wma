@@ -68,4 +68,53 @@ void make_directed(igraph_t* undirected, igraph_t* directed) {
     }
 }
 
+std::string edge_str(igraph_t* graph, igraph_vector_long_t* weights, igraph_vector_long_t* excess, igraph_integer_t eid) {
+    std::ostringstream res;
+    igraph_integer_t from;
+    igraph_integer_t to;
+    igraph_edge(graph, eid, &from, &to);
+    res << from << " - " << to << "(" << VECTOR(*weights)[eid] << "," << VECTOR(*excess)[eid] <<")";
+    return res.str();
+}
+
+void print_graph(igraph_t* graph, igraph_vector_long_t* weights, igraph_vector_long_t* excess) {
+    std::cout << "-----------" << std::endl;
+    if (igraph_is_directed(graph)) {
+        std::cout << "Directed graph" << std::endl;
+    } else {
+        std::cout << "Undirected graph" << std::endl;
+    }
+    std::cout << "Nodes: " << igraph_vcount(graph) << "; Edges: " << igraph_ecount(graph) << std::endl;
+    for (long i = 0; i < igraph_ecount(graph); i++) {
+        std::cout << edge_str(graph, weights, excess, i) << std::endl;
+    }
+    std::cout << "Node incidents: " << std::endl;
+    igraph_vector_t eids;
+    igraph_vector_init(&eids, 0);
+    for (long i = 0; i < igraph_vcount(graph); i++) {
+        std::cout << i << ": ";
+        if (igraph_is_directed(graph)) {
+            std::cout << "OUT: ";
+            igraph_incident(graph, &eids, i, IGRAPH_OUT);
+            for (long j = 0; j < igraph_vector_size(&eids); j++) {
+                std::cout << edge_str(graph, weights, excess, VECTOR(eids)[j]) << ",";
+            }
+            std::cout << "; IN: ";
+            igraph_incident(graph, &eids, i, IGRAPH_IN);
+            for (long j = 0; j < igraph_vector_size(&eids); j++) {
+                std::cout << edge_str(graph, weights, excess, VECTOR(eids)[j]) << ",";
+            }
+            std::cout << "\n";
+        } else {
+            igraph_incident(graph, &eids, i, IGRAPH_ALL);
+            for (long j = 0; j < igraph_vector_size(&eids); j++) {
+                std::cout << edge_str(graph, weights, excess, VECTOR(eids)[j]) << ",";
+            }
+            std::cout << "\n";
+        }
+    }
+    igraph_vector_destroy(&eids);
+    std::cout << "-----------\n\n";
+}
+
 #endif //FCLA_HELPERS_H
