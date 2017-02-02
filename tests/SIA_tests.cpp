@@ -34,6 +34,9 @@ BOOST_AUTO_TEST_CASE (dijsktra_simple_test) {
     igraph_vector_long_t excess;
     igraph_vector_long_init(&excess, 1);
     igraph_vector_long_fill(&excess, 1);
+    igraph_vector_long_t potentials;
+    igraph_vector_long_init(&potentials, 2);
+    igraph_vector_long_fill(&potentials, 0);
 
     mmHeap dheap; //heap used in Dijkstra
     mmHeap gheap; //dummy for dijkstra
@@ -41,9 +44,8 @@ BOOST_AUTO_TEST_CASE (dijsktra_simple_test) {
     next_edges.resize(2);
     for (int i = 0; i < 2; i++) next_edges[i].exists = false;
     igraph_vector_long_t mindist; //minimum distance in Dijstra execution
-    igraph_vector_long_t potentials;
     igraph_vector_t backtrack; //ids of ancestor in Dijkstra tree
-    init_dijsktra(2, &dheap, &mindist, &potentials, &backtrack, 0);
+    init_dijsktra(2, &dheap, &mindist, &backtrack, 0);
 
     igraph_integer_t closest_target;
     closest_target = dijkstra(&graph, &dheap, &gheap, next_edges, &mindist, &excess, &types, &potentials, &long_weight, &backtrack);
@@ -100,8 +102,10 @@ BOOST_AUTO_TEST_CASE (dijkstra_random_test) {
     for (int i = 0; i < size; i++) next_edges[i].exists = false;
     igraph_vector_long_t mindist; //minimum distance in Dijstra execution
     igraph_vector_long_t potentials;
+    igraph_vector_long_init(&potentials, size);
+    igraph_vector_long_fill(&potentials, 0);
     igraph_vector_t backtrack; //ids of ancestor in Dijkstra tree
-    init_dijsktra(size, &dheap, &mindist, &potentials, &backtrack, min_ind);
+    init_dijsktra(size, &dheap, &mindist, &backtrack, min_ind);
 
     igraph_integer_t closest_target;
     closest_target = dijkstra(&graph, &dheap, &gheap, next_edges, &mindist, &excess, &types, &potentials, &weights, &backtrack);
@@ -179,8 +183,10 @@ BOOST_AUTO_TEST_CASE (dijkstra_with_edge_addition) {
 
         igraph_vector_long_t mindist; //minimum distance in Dijstra execution
         igraph_vector_long_t potentials;
+        igraph_vector_long_init(&potentials, size);
+        igraph_vector_long_fill(&potentials, 0);
         igraph_vector_t backtrack; //ids of ancestor in Dijkstra tree
-        init_dijsktra(size, &dheap, &mindist, &potentials, &backtrack, source);
+        init_dijsktra(size, &dheap, &mindist, &backtrack, source);
 
         igraph_integer_t closest_target;
 
@@ -225,6 +231,82 @@ BOOST_AUTO_TEST_CASE (dijkstra_with_edge_addition) {
             igraph_vector_destroy(&real_weights);
             igraph_destroy(&non_neg_graph);
         }
+
+        igraph_destroy(&clique);
+        igraph_vector_long_destroy(&excess);
+        igraph_vector_long_destroy(&mindist);
+        igraph_vector_long_destroy(&potentials);
+        igraph_vector_destroy(&backtrack);
+        igraph_vector_bool_destroy(&types);
+        igraph_vector_long_destroy(&weights);
     }
 
 }
+
+BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
+    igraph_t graph;
+    igraph_empty(&graph, 5, true);
+    igraph_vector_t edges;
+    igraph_real_t edge_array[20] = {0,1,1,2,2,3,3,2,2,1,1,0,1,3,2,4,3,1,4,2};
+    igraph_vector_long_t excess;
+    long excess_array[10] = {9, 2, 9, 0, 0, 0, 10, 10, 10, 10};
+
+    igraph_vector_t backtrack;
+    igraph_real_t bct_array[5] = {0, 0, 1, 2, 2};
+
+    igraph_vector_init_copy(&edges, edge_array, 20);
+    igraph_vector_long_init_copy(&excess, excess_array, 10);
+    igraph_vector_init_copy(&backtrack, bct_array, 5);
+    igraph_add_edges(&graph, &edges, NULL);
+
+    igraph_vector_long_t potentials;
+    igraph_vector_long_init(&potentials, 5);
+    igraph_vector_long_fill(&potentials, 0);
+
+    augmentFlow(&graph, &backtrack, &excess, &potentials, 3);
+    long answer[10] = {7, 0, 7, 2, 2, 2, 10, 10, 10, 10};
+    for (int i = 0; i < 10; i++) {
+        BOOST_CHECK_EQUAL(answer[i],VECTOR(excess)[i]);
+    }
+
+    igraph_vector_long_t mindist;
+    long mindist_arr[5] = {0, 3, 6, 9, 10};
+    igraph_vector_long_init_copy(&mindist, mindist_arr, 5);
+    updatePotentials(&mindist, &potentials, 3);
+    long answer_potentials[5] = {9, 6, 3, 0, 0};
+    for (int i = 0; i < 5; i++) {
+        BOOST_CHECK_EQUAL(answer_potentials[i],VECTOR(potentials)[i]);
+    }
+
+    igraph_vector_destroy(&edges);
+    igraph_vector_long_destroy(&excess);
+    igraph_vector_destroy(&backtrack);
+    igraph_vector_long_destroy(&potentials);
+    igraph_destroy(&graph);
+}
+
+//BOOST_AUTO_TEST_CASE (matchVertex) {
+//    // test findAndEnlarge, augmentFlow, updatePotentials and matchVertex
+//
+//    igraph_t graph;
+//
+//    igraph_vector_long_t weights;
+//    igraph_vector_long_init(&weights, 0);
+//    igraph_vector_bool_t types;
+//    igraph_vector_bool_init(&types, size);
+//    igraph_vector_bool_fill(&types, false);
+//    igraph_vector_bool_set(&types, target, true);
+//
+//    findAndEnlarge(igraph_t* bigraph,
+//                   mmHeap* dheap,
+//                   mmHeap* gheap,
+//                   newEdge (*next_neighbor)(long target_node),
+//                    newEdges& nearest_edges,
+//                    igraph_vector_long_t* weights,
+//                    igraph_vector_long_t* excess,
+//                    igraph_vector_long_t* potentials,
+//                    igraph_vector_long_t* types,
+//                    igraph_vector_long_t* mindist,
+//                    igraph_vector_t* backtrack,
+//                    igraph_integer_t& result_vid);
+//}
