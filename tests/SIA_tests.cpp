@@ -11,7 +11,6 @@
 #include <time.h>
 #include "helpers.h"
 #include "Bipartite.h"
-#include "SIA.h"
 
 using namespace SIA;
 using namespace std;
@@ -285,28 +284,59 @@ BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
     igraph_destroy(&graph);
 }
 
-//BOOST_AUTO_TEST_CASE (matchVertex) {
-//    // test findAndEnlarge, augmentFlow, updatePotentials and matchVertex
-//
-//    igraph_t graph;
-//
-//    igraph_vector_long_t weights;
-//    igraph_vector_long_init(&weights, 0);
-//    igraph_vector_bool_t types;
-//    igraph_vector_bool_init(&types, size);
-//    igraph_vector_bool_fill(&types, false);
-//    igraph_vector_bool_set(&types, target, true);
-//
-//    findAndEnlarge(igraph_t* bigraph,
-//                   mmHeap* dheap,
-//                   mmHeap* gheap,
-//                   newEdge (*next_neighbor)(long target_node),
-//                    newEdges& nearest_edges,
-//                    igraph_vector_long_t* weights,
-//                    igraph_vector_long_t* excess,
-//                    igraph_vector_long_t* potentials,
-//                    igraph_vector_long_t* types,
-//                    igraph_vector_long_t* mindist,
-//                    igraph_vector_t* backtrack,
-//                    igraph_integer_t& result_vid);
-//}
+
+
+BOOST_AUTO_TEST_CASE (testMatching) {
+    // test symetric matching for a set of random graphs using igraph matching
+    long half_size = 2;
+    RandomEdgeGenerator* egg = new RandomEdgeGenerator(half_size, half_size, half_size);
+    long result_weight;
+    igraph_vector_t result_matching;
+    minMatch(half_size, half_size, egg, &result_weight, &result_matching);
+
+    //build igraph based on edges in EdgeGenerator and transform minmatch to maxmatch problem
+    igraph_t test_graph;
+    igraph_vector_bool_t types;
+    igraph_vector_bool_init(&types, half_size*2);
+    igraph_vector_bool_fill(&types, true);
+    for (long i = 0; i < half_size; i++)
+        VECTOR(types)[i] = false;
+    igraph_vector_t weights;
+    igraph_vector_init(&weights,0);
+    igraph_empty(&test_graph, half_size*2, true);
+    for (long i = 0; i < egg->edgeMemory.size(); i++) {
+        newEdge e = egg->edgeMemory[i];
+        igraph_add_edge(&test_graph, e.source_node, e.target_node);
+        igraph_vector_push_back(&weights, e.weight);
+    }
+    //fill graph with non-added edges until full
+    for (long i = 0; i < half_size; i++) {
+        newEdge e;
+        e = egg->getEdge(i);
+        while (e.exists) {
+            igraph_add_edge(&test_graph, e.source_node, e.target_node);
+            igraph_vector_push_back(&weights, e.weight);
+            e = egg->getEdge(i);
+        }
+    }
+    //reverse and lift weights
+    long max_w = igraph_vector_max(&weights);
+    for (long i = 0; i < igraph_vector_size(&weights); i++) {
+        VECTOR(weights)[i] = -VECTOR(weights)[i] + max_w;
+    }
+
+    //calculate and check matching
+    igraph_real_t matching_weight;
+    igraph_vector_long_t matching;
+    igraph_vector_long_init(&matching, 0);
+    igraph_maximum_bipartite_matching(&test_graph, &types, NULL, &matching_weight, &matching, &weights, DBL_EPSILON);
+
+    BOOST_CHECK_EQUAL(- matching_weight + half_size*max_w, result_weight);
+
+    delete egg;
+    igraph_vector_destroy(&weights);
+    igraph_vector_bool_destroy(&types);
+    igraph_destroy(&test_graph);
+    igraph_vector_long_destroy(&matching);
+    igraph_vector_destroy(&result_matching);
+}

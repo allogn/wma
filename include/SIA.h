@@ -8,6 +8,8 @@
 #include <string>
 #include <igraph/igraph.h>
 #include "nheap.h"
+#include "helpers.h"
+#include "EdgeGenerator.h"
 
 namespace SIA {
 
@@ -16,14 +18,6 @@ namespace SIA {
         std::string message = "There is no path in a bipartite graph from a source node to a non-full target node";
     } NO_PATH_ERROR;
     typedef fHeap<long> mmHeap;
-    typedef struct {
-        bool exists; //flag if there is any new edge to be added
-        igraph_integer_t source_node;
-        igraph_integer_t target_node;
-        long weight;
-        long capacity;
-    } newEdge;
-    typedef std::vector<newEdge> newEdges;
 
     /*
      * Get Cost of an Edge according to potential values of vertices
@@ -182,7 +176,7 @@ namespace SIA {
     bool addHeapedEdge(igraph_t* bigraph,
                        mmHeap* dheap,
                        mmHeap* gheap,
-                       newEdge (*next_neighbor)(long target_node),
+                       EdgeGenerator* edge_generator,
                        newEdges& new_edges,
                        igraph_vector_long_t* weights,
                        igraph_vector_long_t* excess,
@@ -197,7 +191,7 @@ namespace SIA {
         addNewEdge(bigraph, dheap, new_edges[source_node], weights, excess, potentials, mindist);
 
         // update vector with next nearest weights
-        newEdge next_new_edge = next_neighbor(source_node);
+        newEdge next_new_edge = edge_generator->getEdge(source_node);
         new_edges[source_node] = next_new_edge;
         // enqueue the next new value in gheap
         if (next_new_edge.exists) {
@@ -217,7 +211,7 @@ namespace SIA {
     bool findAndEnlarge(igraph_t* bigraph,
                         mmHeap* dheap,
                         mmHeap* gheap,
-                        newEdge (*next_neighbor)(long target_node),
+                        EdgeGenerator* edge_generator,
                         newEdges& nearest_edges,
                         igraph_vector_long_t* weights,
                         igraph_vector_long_t* excess,
@@ -235,7 +229,7 @@ namespace SIA {
 
             //if current residual graph is full, then return target_id or exception
             if (target_id == -1) {
-                if (!addHeapedEdge(bigraph, gheap, dheap, next_neighbor, nearest_edges,
+                if (!addHeapedEdge(bigraph, dheap, gheap, edge_generator, nearest_edges,
                                    weights, excess, potentials, mindist)) {
                     return false;
                 }
@@ -243,7 +237,7 @@ namespace SIA {
                 long sp_length = VECTOR(*mindist)[target_id];
                 //check threshold
                 if (ifValidTarget(sp_length, gheap) &&
-                        addHeapedEdge(bigraph, gheap, dheap, next_neighbor, nearest_edges,
+                        addHeapedEdge(bigraph, dheap, gheap, edge_generator, nearest_edges,
                                       weights, excess, potentials, mindist)) {
                     target_id = -1; //invalidate result if new edge is added, otherwise return current result
                 }
@@ -342,86 +336,113 @@ namespace SIA {
      * In fact there is one continuous Dijkstra execution that is iteratively terminated
      * or started depending on current results and a stream of new edges
      */
-//    void match_vertex(igraph_t* bigraph, //residual bipartite graph
-//                      igraph_vector_bool_t* types,
-//                      igraph_vector_long_t* excess,
-//                      igraph_vector_long_* weights,
-//                      igraph_vector_long_t* potentials,
-//                      igraph_integer_t source_id,
-//                      newEdges& nearest_edges, // global cache for storing vertex ids that correspond to nearest_weights
-//                      newEdge (*next_neighbor)(igraph_integer_t) //callback that returns weight of next nearest vertex
-//    )
-//    {
-//        //init heaps
-//        mmHeap gheap; //global heap stores information of the next not-added neighbor of vertices
-//        mmHeap dheap; //heap used in Dijkstra
-//
-//        igraph_vector_long_t mindist; //minimum distance in Dijstra execution
-//        igraph_vector_t backtrack; //ids of ancestor in Dijkstra tree
-//        init_dijsktra(igraph_vcount(bigraph), &dheap, &mindist, &backtrack, source_id);
-//
-//        //nearest_edges array is global, but gheap is local. In order to descrease heap size we enheap
-//        //only those nodes which were visited by the algorithm (relevant)
-//        //if a node was not yet visited, then we should enheap the value from nearest_edges
-//        //this is done in dijkstra, because gheap is updated by the current value from nearest_edges if mindist is updated
-//        gheap.enqueue(source_id, heapedCost(nearest_edges[source_id], 0, 0));
-//
-//        //enlarge graph until valid path is found, or throw an exception
-//        igraph_integer_t result_vid;
-//        if (!findAndEnlarge(bigraph,&dheap,&gheap,next_neighbor,nearest_edges,
-//                            weights,excess,potentials,types,&mindist,&backtrack,&result_vid))
-//        {
-//            throw NO_PATH_ERROR; //no path in complete graph
-//        }
-//
-//        augmentFlow(bigraph, &backtrack, &excess, potentials, result_vid);
-//        updatePotentials(&mindist, potentials, result_vid);
-//
-//        //free memory
-//        igraph_vector_long_destroy(&mindist);
-//        igraph_vector_destroy(&backtrack);
-//    }
+    void matchVertex(igraph_t* bigraph, //residual bipartite graph
+                     igraph_vector_bool_t* types,
+                     igraph_vector_long_t* excess,
+                     igraph_vector_long_t* weights,
+                     igraph_vector_long_t* potentials,
+                     igraph_integer_t source_id,
+                     newEdges& nearest_edges, // global cache for storing vertex ids that correspond to nearest_weights
+                     EdgeGenerator* edge_generator
+    )
+    {
+        //init heaps
+        mmHeap gheap; //global heap stores information of the next not-added neighbor of vertices
+        mmHeap dheap; //heap used in Dijkstra
 
+        igraph_vector_long_t mindist; //minimum distance in Dijstra execution
+        igraph_vector_t backtrack; //ids of ancestor in Dijkstra tree
+        init_dijsktra(igraph_vcount(bigraph), &dheap, &mindist, &backtrack, source_id);
 
-//
-//    int run(igraph_t* bigraph, igraph_real_t* result_weight, igraph_vector_long_t* result_matching) {
-//        //init variables
-//        fHeap<long long> dijkH; //heap for Dijkstra
-//        fHeap<long long> globalH; //heap for edges
-//        fHeap<long long> updateH; //heap for managing updates
-//
-//        totalflow = 0;
-//        taumax = 0;
-//
-//        excess = new long[noA+noB];
-//        fill(excess,excess+noA,1);
-//        fill(excess+noA,excess+noA+noB,-1);
-//
-//        flow = new int[g->m];
-//        fill(flow,flow+g->m,1);
-//
-//        psi = new long long[noA+noB];
-//        fill(psi,psi+noA+noB,0);
-//
-//        mindist = new long long[noA+noB];
-//        fill(mindist,mindist+noA+noB,LONG_MAX);
-//
-//        mineid = new long[noA+noB];
-//        fill(mineid,mineid+noA+noB,-1);
-//
-//        watched = new bool[noA+noB];
-//        fill(watched,watched+noA+noB,0);
-//
-//        //run main loop: round-robin until all vertices are matched
-//        long q = 0;
-//        while (totalflow < noA) {
-//            processId(q);
-//            q++;
-//            if (q >= noA) q = 0;
-//        }
-//
-//        //@todo calculate total cost here and return to &result_weight
-//    }
+        //nearest_edges array is global, but gheap is local. In order to descrease heap size we enheap
+        //only those nodes which were visited by the algorithm (relevant)
+        //if a node was not yet visited, then we should enheap the value from nearest_edges
+        //this is done in dijkstra, because gheap is updated by the current value from nearest_edges if mindist is updated
+        gheap.enqueue(source_id, heapedCost(nearest_edges[source_id].weight, 0, 0));
+
+        //enlarge graph until valid path is found, or throw an exception
+        igraph_integer_t result_vid;
+        if (!findAndEnlarge(bigraph,&dheap,&gheap,edge_generator,nearest_edges,
+                            weights,excess,potentials,types,&mindist,&backtrack,&result_vid))
+        {
+            throw "No valid matching in the graph, out of additional nodes"; //no path in complete graph
+        }
+
+        augmentFlow(bigraph, &backtrack, excess, potentials, result_vid);
+        updatePotentials(&mindist, potentials, result_vid);
+
+        print_graph(bigraph, weights, excess);
+
+        //free memory
+        igraph_vector_long_destroy(&mindist);
+        igraph_vector_destroy(&backtrack);
+    }
+
+    /*
+     * Run matching algorithm on a bipartite graph with vcountA,vcountB number of vertices of two types
+     *
+     * No not pass bipartite graph, but a function that provides incremental edges
+     */
+    void minMatch(long vcountA, long vcountB,
+                  EdgeGenerator* edge_generator,
+                  long* result_weight,
+                  igraph_vector_t* result_matching)
+    {
+        long size = vcountA + vcountB;
+        igraph_t bigraph;
+        igraph_empty(&bigraph, size, true); //create directed graph
+
+        igraph_vector_long_t potentials;
+        igraph_vector_long_t weights;
+        igraph_vector_bool_t types;
+        igraph_vector_long_t excess;
+
+        igraph_vector_long_init(&potentials,size);
+        igraph_vector_long_init(&weights, 0);
+        igraph_vector_long_init(&excess, 0);
+        igraph_vector_bool_init(&types, size);
+
+        igraph_vector_long_fill(&potentials, 0);
+        igraph_vector_bool_fill(&types, true);
+        for (long i = 0; i < vcountA; i++) {
+            VECTOR(types)[i] = false;
+        }
+
+        //init with a first nearest neighbor for all vertices
+        newEdges nearest_edges;
+        for (long i = 0; i < size; i++){
+            newEdge e = edge_generator->getEdge(i);
+            nearest_edges.push_back(e);
+        }
+
+        for (long i = 0; i < vcountA; i++) {
+            matchVertex(&bigraph, &types, &excess, &weights, &potentials, i, nearest_edges, edge_generator);
+        }
+
+        //arrange an answer
+        *result_weight = 0;
+        igraph_vector_init(result_matching,size);
+        for (long i = 0; i < vcountA; i++) {
+            igraph_vector_t neis;
+            igraph_vector_init(&neis,1);
+            igraph_neighbors(&bigraph, &neis, i, IGRAPH_IN);
+            igraph_integer_t matched_id = VECTOR(neis)[0];
+            igraph_vector_destroy(&neis);
+
+            VECTOR(*result_matching)[i] = matched_id;
+            VECTOR(*result_matching)[matched_id] = i;
+
+            //get corresponding edge
+            igraph_integer_t eid;
+            igraph_get_eid(&bigraph,&eid,i,matched_id,true,true); //true,true = directed graph, report errors
+            *result_weight += VECTOR(weights)[eid];
+        }
+
+        igraph_vector_long_destroy(&potentials);
+        igraph_vector_long_destroy(&weights);
+        igraph_vector_long_destroy(&excess);
+        igraph_vector_bool_destroy(&types);
+    }
 
 }
 
