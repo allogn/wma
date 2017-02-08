@@ -18,6 +18,21 @@ typedef std::vector<newEdge> newEdges;
 
 class EdgeGenerator {
 public:
+    newEdges edgeMemory;
+
+    void save(std::string filename) {
+        ofstream f;
+        f.open(filename,std::ofstream::out);
+        for (long i = 0; i < edgeMemory.size(); i++) {
+            f << edgeMemory[i].exists << ","
+              << edgeMemory[i].target_node << ","
+              << edgeMemory[i].capacity << ","
+              << edgeMemory[i].source_node << ","
+              << edgeMemory[i].weight << endl;
+        }
+        f.close();
+    }
+
     EdgeGenerator() {};
     virtual ~EdgeGenerator() {};
     virtual newEdge getEdge(igraph_integer_t vid) {
@@ -27,13 +42,63 @@ public:
     };
 };
 
+class LoadedEdgeGenerator : public EdgeGenerator {
+public:
+    newEdges edgeQueue;
+    LoadedEdgeGenerator(std::string filename) {
+        this->load(filename);
+    }
+    ~LoadedEdgeGenerator() {}
+    void load(std::string filename) {
+        ifstream f(filename);
+        if (!f.is_open())
+            throw "File does not exist";
+        std::string line;
+        while ( getline (f,line) ) {
+            if (line == "")
+                throw "Empty file with Edges";
+            std::vector<long> vect;
+            std::stringstream ss(line);
+            long i;
+            while (ss >> i)
+            {
+                vect.push_back(i);
+
+                if (ss.peek() == ',')
+                    ss.ignore();
+            }
+            newEdge e;
+            e.exists = vect[0];
+            e.target_node = vect[1];
+            e.capacity = vect[2];
+            e.source_node = vect[3];
+            e.weight = vect[4];
+            edgeMemory.push_back(e);
+        }
+        f.close();
+        edgeQueue = edgeMemory;
+    }
+
+    newEdge getEdge(igraph_integer_t vid) override {
+        for (long i = 0; i < this->edgeQueue.size(); i++) {
+            if (edgeQueue[i].source_node == vid) {
+                newEdge e = edgeQueue[i];
+                edgeQueue.erase(edgeQueue.begin() + i);
+                return e;
+            }
+        }
+        newEdge new_edge;
+        new_edge.exists = false;
+        return new_edge;
+    }
+};
+
 /*
  * Class that provides a callback function that incrementally throws new edges for each node in weight increasing order
  */
 class RandomEdgeGenerator : public EdgeGenerator {
 public:
     long n;
-    newEdges edgeMemory;
     std::vector<long> prev_weights;
     std::vector<std::vector<long>> neighbors;
     std::vector<long> next_neighbor_id;
@@ -84,6 +149,7 @@ public:
             new_edge.exists = true;
             new_edge.capacity = 1;
             edgeMemory.push_back(new_edge);
+            prev_weights[vid] = new_edge.weight;
         } else {
             new_edge.exists = false;
         }

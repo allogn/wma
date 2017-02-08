@@ -9,6 +9,7 @@
 #include <SIA.h>
 #include <algorithm>
 #include <time.h>
+#include <EdgeGenerator.h>
 #include "helpers.h"
 #include "Bipartite.h"
 
@@ -26,10 +27,10 @@ BOOST_AUTO_TEST_CASE (dijsktra_simple_test) {
     igraph_vector_long_t long_weight;
     igraph_vector_long_init(&long_weight, 1);
     igraph_vector_long_set(&long_weight, 0, 10);
-    igraph_vector_bool_t types;
-    igraph_vector_bool_init(&types, 2);
-    igraph_vector_bool_fill(&types, false);
-    igraph_vector_bool_set(&types, 1, true);
+    igraph_vector_long_t node_excess;
+    igraph_vector_long_init(&node_excess, 2);
+    igraph_vector_long_fill(&node_excess, -1);
+    igraph_vector_long_set(&node_excess, 1, 1);
     igraph_vector_long_t excess;
     igraph_vector_long_init(&excess, 1);
     igraph_vector_long_fill(&excess, 1);
@@ -47,7 +48,7 @@ BOOST_AUTO_TEST_CASE (dijsktra_simple_test) {
     init_dijsktra(2, &dheap, &mindist, &backtrack, 0);
 
     igraph_integer_t closest_target;
-    closest_target = dijkstra(&graph, &dheap, &gheap, next_edges, &mindist, &excess, &types, &potentials, &long_weight, &backtrack);
+    closest_target = dijkstra(&graph, &dheap, &gheap, next_edges, &mindist, &excess, &node_excess, &potentials, &long_weight, &backtrack);
     BOOST_CHECK(closest_target == 1);
 
     igraph_matrix_t correct_answer;
@@ -62,7 +63,7 @@ BOOST_AUTO_TEST_CASE (dijsktra_simple_test) {
     //free memory
     igraph_vector_destroy(&real_weight);
     igraph_vector_long_destroy(&long_weight);
-    igraph_vector_bool_destroy(&types);
+    igraph_vector_long_destroy(&node_excess);
     igraph_vector_destroy(&backtrack);
     igraph_vector_long_destroy(&excess);
     igraph_matrix_destroy(&correct_answer);
@@ -89,10 +90,10 @@ BOOST_AUTO_TEST_CASE (dijkstra_random_test) {
     igraph_integer_t min_ind = static_cast<igraph_integer_t>(igraph_vector_which_min(&x));
     igraph_integer_t max_ind = static_cast<igraph_integer_t>(igraph_vector_which_max(&x));
 
-    igraph_vector_bool_t types;
-    igraph_vector_bool_init(&types, size);
-    igraph_vector_bool_fill(&types, false);
-    igraph_vector_bool_set(&types, max_ind, true);
+    igraph_vector_long_t node_excess;
+    igraph_vector_long_init(&node_excess, size);
+    igraph_vector_long_fill(&node_excess, -1);
+    igraph_vector_long_set(&node_excess, max_ind, 1);
 
     mmHeap dheap; //heap used in Dijkstra
     mmHeap gheap; //dummy for dijkstra
@@ -107,7 +108,7 @@ BOOST_AUTO_TEST_CASE (dijkstra_random_test) {
     init_dijsktra(size, &dheap, &mindist, &backtrack, min_ind);
 
     igraph_integer_t closest_target;
-    closest_target = dijkstra(&graph, &dheap, &gheap, next_edges, &mindist, &excess, &types, &potentials, &weights, &backtrack);
+    closest_target = dijkstra(&graph, &dheap, &gheap, next_edges, &mindist, &excess, &node_excess, &potentials, &weights, &backtrack);
 
     //check with igraph dijkstra
     igraph_matrix_t correct_answer;
@@ -129,7 +130,7 @@ BOOST_AUTO_TEST_CASE (dijkstra_random_test) {
     igraph_destroy(&graph);
     igraph_vector_destroy(&real_weights);
     igraph_vector_long_destroy(&weights);
-    igraph_vector_bool_destroy(&types);
+    igraph_vector_long_destroy(&node_excess);
     igraph_vector_destroy(&backtrack);
     igraph_vector_long_destroy(&excess);
     igraph_matrix_destroy(&correct_answer);
@@ -165,10 +166,10 @@ BOOST_AUTO_TEST_CASE (dijkstra_with_edge_addition) {
 
         igraph_vector_long_t weights;
         igraph_vector_long_init(&weights, 0);
-        igraph_vector_bool_t types;
-        igraph_vector_bool_init(&types, size);
-        igraph_vector_bool_fill(&types, false);
-        igraph_vector_bool_set(&types, target, true);
+        igraph_vector_long_t node_excess;
+        igraph_vector_long_init(&node_excess, size);
+        igraph_vector_long_fill(&node_excess, -1);
+        igraph_vector_long_set(&node_excess, target, 1);
 
         newEdges next_edges; //dummy cache with the first nearest neighbors
         next_edges.resize(size);
@@ -200,7 +201,7 @@ BOOST_AUTO_TEST_CASE (dijkstra_with_edge_addition) {
             BOOST_CHECK_EQUAL(from, new_edges[i].source_node);
             BOOST_CHECK_EQUAL(to, new_edges[i].target_node);
             //run dijkstra
-            closest_target = dijkstra(&clique, &dheap, &gheap, next_edges, &mindist, &excess, &types, &potentials, &weights, &backtrack);
+            closest_target = dijkstra(&clique, &dheap, &gheap, next_edges, &mindist, &excess, &node_excess, &potentials, &weights, &backtrack);
 
             //check with igraph dijkstra
             igraph_t non_neg_graph;
@@ -236,7 +237,7 @@ BOOST_AUTO_TEST_CASE (dijkstra_with_edge_addition) {
         igraph_vector_long_destroy(&mindist);
         igraph_vector_long_destroy(&potentials);
         igraph_vector_destroy(&backtrack);
-        igraph_vector_bool_destroy(&types);
+        igraph_vector_long_destroy(&node_excess);
         igraph_vector_long_destroy(&weights);
     }
 
@@ -249,12 +250,15 @@ BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
     igraph_real_t edge_array[20] = {0,1,1,2,2,3,3,2,2,1,1,0,1,3,2,4,3,1,4,2};
     igraph_vector_long_t excess;
     long excess_array[10] = {9, 2, 9, 0, 0, 0, 10, 10, 10, 10};
+    igraph_vector_long_t node_excess;
+    long node_excess_array[5] = {-1, -1, 0, 1, 1};
 
     igraph_vector_t backtrack;
     igraph_real_t bct_array[5] = {0, 0, 1, 2, 2};
 
     igraph_vector_init_copy(&edges, edge_array, 20);
     igraph_vector_long_init_copy(&excess, excess_array, 10);
+    igraph_vector_long_init_copy(&node_excess, node_excess_array, 5);
     igraph_vector_init_copy(&backtrack, bct_array, 5);
     igraph_add_edges(&graph, &edges, NULL);
 
@@ -262,7 +266,7 @@ BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
     igraph_vector_long_init(&potentials, 5);
     igraph_vector_long_fill(&potentials, 0);
 
-    augmentFlow(&graph, &backtrack, &excess, &potentials, 3);
+    augmentFlow(&graph, &backtrack, &excess, &node_excess, &potentials, 3);
     long answer[10] = {7, 0, 7, 2, 2, 2, 10, 10, 10, 10};
     for (int i = 0; i < 10; i++) {
         BOOST_CHECK_EQUAL(answer[i],VECTOR(excess)[i]);
@@ -279,64 +283,74 @@ BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
 
     igraph_vector_destroy(&edges);
     igraph_vector_long_destroy(&excess);
+    igraph_vector_long_destroy(&node_excess);
     igraph_vector_destroy(&backtrack);
     igraph_vector_long_destroy(&potentials);
     igraph_destroy(&graph);
 }
 
 
-
 BOOST_AUTO_TEST_CASE (testMatching) {
     // test symetric matching for a set of random graphs using igraph matching
-    long half_size = 2;
-    RandomEdgeGenerator* egg = new RandomEdgeGenerator(half_size, half_size, half_size);
-    long result_weight;
-    igraph_vector_t result_matching;
-    minMatch(half_size, half_size, egg, &result_weight, &result_matching);
+    int counter = 0;
+    while(counter++ < 5) {
+        long half_size = counter+40;
+        RandomEdgeGenerator* egg = new RandomEdgeGenerator(half_size, half_size, half_size);
+//        LoadedEdgeGenerator* egg = new LoadedEdgeGenerator("/Users/alvis/PhD/fcla/bin/egg.txt");
+        long result_weight;
+        igraph_vector_t result_matching;
+        minMatch(half_size, half_size, 1, egg, &result_weight, &result_matching);
 
-    //build igraph based on edges in EdgeGenerator and transform minmatch to maxmatch problem
-    igraph_t test_graph;
-    igraph_vector_bool_t types;
-    igraph_vector_bool_init(&types, half_size*2);
-    igraph_vector_bool_fill(&types, true);
-    for (long i = 0; i < half_size; i++)
-        VECTOR(types)[i] = false;
-    igraph_vector_t weights;
-    igraph_vector_init(&weights,0);
-    igraph_empty(&test_graph, half_size*2, true);
-    for (long i = 0; i < egg->edgeMemory.size(); i++) {
-        newEdge e = egg->edgeMemory[i];
-        igraph_add_edge(&test_graph, e.source_node, e.target_node);
-        igraph_vector_push_back(&weights, e.weight);
-    }
-    //fill graph with non-added edges until full
-    for (long i = 0; i < half_size; i++) {
-        newEdge e;
-        e = egg->getEdge(i);
-        while (e.exists) {
+        //build igraph based on edges in EdgeGenerator and transform minmatch to maxmatch problem
+        igraph_t test_graph;
+        igraph_vector_long_t node_excess;
+        igraph_vector_bool_t types;
+        igraph_vector_long_init(&node_excess, half_size*2);
+        igraph_vector_bool_init(&types, half_size*2); //used for igraph_matching
+        igraph_vector_long_fill(&node_excess, 1);
+        igraph_vector_bool_fill(&types, true);
+        for (long i = 0; i < half_size; i++) {
+            VECTOR(node_excess)[i] = -1;
+            VECTOR(types)[i] = false;
+        }
+        igraph_vector_t weights;
+        igraph_vector_init(&weights,0);
+        igraph_empty(&test_graph, half_size*2, true);
+        for (long i = 0; i < egg->edgeMemory.size(); i++) {
+            newEdge e = egg->edgeMemory[i];
             igraph_add_edge(&test_graph, e.source_node, e.target_node);
             igraph_vector_push_back(&weights, e.weight);
-            e = egg->getEdge(i);
         }
+        //fill graph with non-added edges until full
+        for (long i = 0; i < half_size; i++) {
+            newEdge e;
+            e = egg->getEdge(i);
+            while (e.exists) {
+                igraph_add_edge(&test_graph, e.source_node, e.target_node);
+                igraph_vector_push_back(&weights, e.weight);
+                e = egg->getEdge(i);
+            }
+        }
+        egg->save("egg.txt");
+        //reverse and lift weights
+        long max_w = igraph_vector_max(&weights);
+        for (long i = 0; i < igraph_vector_size(&weights); i++) {
+            VECTOR(weights)[i] = -VECTOR(weights)[i] + max_w;
+        }
+
+        //calculate and check matching
+        igraph_real_t matching_weight;
+        igraph_vector_long_t matching;
+        igraph_vector_long_init(&matching, 0);
+        igraph_maximum_bipartite_matching(&test_graph, &types, NULL, &matching_weight, &matching, &weights, DBL_EPSILON);
+        BOOST_REQUIRE_EQUAL(- matching_weight + half_size*max_w, result_weight);
+
+        delete egg;
+        igraph_vector_destroy(&weights);
+        igraph_vector_long_destroy(&node_excess);
+        igraph_vector_bool_destroy(&types);
+        igraph_destroy(&test_graph);
+        igraph_vector_long_destroy(&matching);
+        igraph_vector_destroy(&result_matching);
     }
-    //reverse and lift weights
-    long max_w = igraph_vector_max(&weights);
-    for (long i = 0; i < igraph_vector_size(&weights); i++) {
-        VECTOR(weights)[i] = -VECTOR(weights)[i] + max_w;
-    }
-
-    //calculate and check matching
-    igraph_real_t matching_weight;
-    igraph_vector_long_t matching;
-    igraph_vector_long_init(&matching, 0);
-    igraph_maximum_bipartite_matching(&test_graph, &types, NULL, &matching_weight, &matching, &weights, DBL_EPSILON);
-
-    BOOST_CHECK_EQUAL(- matching_weight + half_size*max_w, result_weight);
-
-    delete egg;
-    igraph_vector_destroy(&weights);
-    igraph_vector_bool_destroy(&types);
-    igraph_destroy(&test_graph);
-    igraph_vector_long_destroy(&matching);
-    igraph_vector_destroy(&result_matching);
 }

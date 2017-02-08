@@ -93,7 +93,7 @@ namespace SIA {
                               newEdges& nearest_edges,
                               igraph_vector_long_t* mindist, //distance from a source node
                               igraph_vector_long_t* edge_excess, //amount of "free" flow = capacity - actual flow
-                              igraph_vector_bool_t* types,
+                              igraph_vector_long_t* node_excess,
                               igraph_vector_long_t* potentials,
                               igraph_vector_long_t* weights,
                               igraph_vector_t* backtrack //store ids of an ancestor in a dijkstra tree
@@ -104,7 +104,7 @@ namespace SIA {
         {
             //if current node is of second type and is not full - return it
             //the degree of outgoing edges is how many customers the service is matched with
-            if (VECTOR(*types)[current_node]) {
+            if (VECTOR(*node_excess)[current_node] > 0) {
                 //enheap back the last node in order to return the same (best) result
                 dheap->enqueue(current_node, VECTOR(*mindist)[current_node]);
                 return current_node; //already contains correct path distance in both backtrack and mindist arrays
@@ -130,9 +130,9 @@ namespace SIA {
                     //update or enqueue target node
                     dheap->updateorenqueue(target_node, new_cost);
                     //maintain global heap (value for target_node was changed because of mindist
-                    long nearest_weight = nearest_edges[target_node].weight;
-                    long new_edge_cost = heapedCost(nearest_weight, VECTOR(*potentials)[target_node], new_cost);
-                    if (nearest_weight != -1) gheap->updateorenqueue(target_node, new_edge_cost);
+                    newEdge nearest_edge = nearest_edges[target_node];
+                    long new_edge_cost = heapedCost(nearest_edge.weight, VECTOR(*potentials)[target_node], new_cost);
+                    if (nearest_edge.exists) gheap->updateorenqueue(target_node, new_edge_cost);
                 }
             }
             igraph_vector_destroy(&eids);
@@ -187,7 +187,6 @@ namespace SIA {
         long source_node;
         if (!gheap->dequeue(source_node))
             return false;
-
         addNewEdge(bigraph, dheap, new_edges[source_node], weights, excess, potentials, mindist);
 
         // update vector with next nearest weights
@@ -214,31 +213,32 @@ namespace SIA {
                         EdgeGenerator* edge_generator,
                         newEdges& nearest_edges,
                         igraph_vector_long_t* weights,
-                        igraph_vector_long_t* excess,
+                        igraph_vector_long_t* edge_excess,
                         igraph_vector_long_t* potentials,
-                        igraph_vector_bool_t* types,
+                        igraph_vector_long_t* node_excess,
                         igraph_vector_long_t* mindist,
                         igraph_vector_t* backtrack,
-                        igraph_integer_t* result_vid)
+                        igraph_integer_t* result_vid
+    )
     {
 
         igraph_integer_t target_id = -1;
         while (target_id == -1) {
             //run Dijkstra
-            target_id = dijkstra(bigraph,dheap,gheap,nearest_edges,mindist,excess,types,potentials,weights,backtrack);
+            target_id = dijkstra(bigraph,dheap,gheap,nearest_edges,mindist,edge_excess,node_excess,potentials,weights,backtrack);
 
             //if current residual graph is full, then return target_id or exception
             if (target_id == -1) {
                 if (!addHeapedEdge(bigraph, dheap, gheap, edge_generator, nearest_edges,
-                                   weights, excess, potentials, mindist)) {
+                                   weights, edge_excess, potentials, mindist)) {
                     return false;
                 }
             } else {
                 long sp_length = VECTOR(*mindist)[target_id];
                 //check threshold
-                if (ifValidTarget(sp_length, gheap) &&
+                if (!ifValidTarget(sp_length, gheap) &&
                         addHeapedEdge(bigraph, dheap, gheap, edge_generator, nearest_edges,
-                                      weights, excess, potentials, mindist)) {
+                                      weights, edge_excess, potentials, mindist)) {
                     target_id = -1; //invalidate result if new edge is added, otherwise return current result
                 }
             }
@@ -270,10 +270,13 @@ namespace SIA {
      * A path is reconstructed based on backtrack array, a source node is one that points to itself
      * - Inverted edges already must exist in the graph
      * - Ignore heap values as they will not be used anymore
+     *
+     * Note that uniflow is possible for one iteration
      */
     long augmentFlow(igraph_t* bigraph,
                      igraph_vector_t* backtrack,
-                     igraph_vector_long_t* excess,
+                     igraph_vector_long_t* edge_excess,
+                     igraph_vector_long_t* node_excess,
                      igraph_vector_long_t* potentials,
                      igraph_integer_t target)
     {
@@ -286,13 +289,17 @@ namespace SIA {
         igraph_vector_t backward_vids;
         igraph_vector_init(&backward_vids, 0);
 
-        while (VECTOR(*backtrack)[target] != target) {
-            igraph_vector_push_back(&backward_vids, target);
-            igraph_vector_push_back(&backward_vids, VECTOR(*backtrack)[target]);
-            target = VECTOR(*backtrack)[target];
+        while (VECTOR(*backtrack)[current_node] != current_node) {
+            igraph_vector_push_back(&backward_vids, current_node);
+            igraph_vector_push_back(&backward_vids, VECTOR(*backtrack)[current_node]);
+            current_node = VECTOR(*backtrack)[current_node];
         }
         igraph_vector_copy(&forward_vids, &backward_vids);
         igraph_vector_reverse(&forward_vids);
+
+        //current node contains the source node after while loop, so we change node_excess
+        VECTOR(*node_excess)[target] -= 1;
+        VECTOR(*node_excess)[current_node] += 1;
 
         igraph_es_t forward_es;
         igraph_es_t backward_es;
@@ -304,7 +311,7 @@ namespace SIA {
         igraph_eit_create(bigraph, forward_es, &eit);
         while (!IGRAPH_EIT_END(eit)) {
             igraph_integer_t eid = IGRAPH_EIT_GET(eit);
-            min_excess = min(min_excess, VECTOR(*excess)[eid]);
+            min_excess = min(min_excess, VECTOR(*edge_excess)[eid]);
             IGRAPH_EIT_NEXT(eit);
         }
 
@@ -312,14 +319,14 @@ namespace SIA {
         IGRAPH_EIT_RESET(eit);
         while (!IGRAPH_EIT_END(eit)) {
             igraph_integer_t eid = IGRAPH_EIT_GET(eit);
-            VECTOR(*excess)[eid] = VECTOR(*excess)[eid] - min_excess;
+            VECTOR(*edge_excess)[eid] = VECTOR(*edge_excess)[eid] - min_excess;
             IGRAPH_EIT_NEXT(eit);
         }
         igraph_eit_destroy(&eit);
         igraph_eit_create(bigraph, backward_es, &eit);
         while (!IGRAPH_EIT_END(eit)) {
             igraph_integer_t eid = IGRAPH_EIT_GET(eit);
-            VECTOR(*excess)[eid] = VECTOR(*excess)[eid] + min_excess;
+            VECTOR(*edge_excess)[eid] = VECTOR(*edge_excess)[eid] + min_excess;
             IGRAPH_EIT_NEXT(eit);
         }
         igraph_eit_destroy(&eit);
@@ -337,8 +344,8 @@ namespace SIA {
      * or started depending on current results and a stream of new edges
      */
     void matchVertex(igraph_t* bigraph, //residual bipartite graph
-                     igraph_vector_bool_t* types,
-                     igraph_vector_long_t* excess,
+                     igraph_vector_long_t* node_excess,
+                     igraph_vector_long_t* edge_excess,
                      igraph_vector_long_t* weights,
                      igraph_vector_long_t* potentials,
                      igraph_integer_t source_id,
@@ -346,6 +353,7 @@ namespace SIA {
                      EdgeGenerator* edge_generator
     )
     {
+//        print_graph(bigraph, weights, edge_excess);
         //init heaps
         mmHeap gheap; //global heap stores information of the next not-added neighbor of vertices
         mmHeap dheap; //heap used in Dijkstra
@@ -358,21 +366,22 @@ namespace SIA {
         //only those nodes which were visited by the algorithm (relevant)
         //if a node was not yet visited, then we should enheap the value from nearest_edges
         //this is done in dijkstra, because gheap is updated by the current value from nearest_edges if mindist is updated
-        gheap.enqueue(source_id, heapedCost(nearest_edges[source_id].weight, 0, 0));
+        if (nearest_edges[source_id].exists) //otherwise all edges were already added, but everything is still fine
+            gheap.enqueue(source_id, heapedCost(nearest_edges[source_id].weight, 0, 0));
 
         //enlarge graph until valid path is found, or throw an exception
         igraph_integer_t result_vid;
         if (!findAndEnlarge(bigraph,&dheap,&gheap,edge_generator,nearest_edges,
-                            weights,excess,potentials,types,&mindist,&backtrack,&result_vid))
+                            weights,edge_excess,potentials,node_excess,&mindist,&backtrack,&result_vid))
         {
             throw "No valid matching in the graph, out of additional nodes"; //no path in complete graph
         }
 
-        augmentFlow(bigraph, &backtrack, excess, potentials, result_vid);
+        augmentFlow(bigraph, &backtrack, edge_excess, node_excess, potentials, result_vid);
         updatePotentials(&mindist, potentials, result_vid);
 
-        print_graph(bigraph, weights, excess);
 
+//        print_graph(bigraph, weights, edge_excess);
         //free memory
         igraph_vector_long_destroy(&mindist);
         igraph_vector_destroy(&backtrack);
@@ -383,7 +392,7 @@ namespace SIA {
      *
      * No not pass bipartite graph, but a function that provides incremental edges
      */
-    void minMatch(long vcountA, long vcountB,
+    void minMatch(long vcountA, long vcountB, long targetCapacity,
                   EdgeGenerator* edge_generator,
                   long* result_weight,
                   igraph_vector_t* result_matching)
@@ -394,18 +403,18 @@ namespace SIA {
 
         igraph_vector_long_t potentials;
         igraph_vector_long_t weights;
-        igraph_vector_bool_t types;
         igraph_vector_long_t excess;
+        igraph_vector_long_t node_excess;
 
         igraph_vector_long_init(&potentials,size);
         igraph_vector_long_init(&weights, 0);
         igraph_vector_long_init(&excess, 0);
-        igraph_vector_bool_init(&types, size);
+        igraph_vector_long_init(&node_excess, size);
 
         igraph_vector_long_fill(&potentials, 0);
-        igraph_vector_bool_fill(&types, true);
+        igraph_vector_long_fill(&node_excess, 1);
         for (long i = 0; i < vcountA; i++) {
-            VECTOR(types)[i] = false;
+            VECTOR(node_excess)[i] = -1;
         }
 
         //init with a first nearest neighbor for all vertices
@@ -416,7 +425,8 @@ namespace SIA {
         }
 
         for (long i = 0; i < vcountA; i++) {
-            matchVertex(&bigraph, &types, &excess, &weights, &potentials, i, nearest_edges, edge_generator);
+            matchVertex(&bigraph, &node_excess, &excess, &weights, &potentials,
+                        i, nearest_edges, edge_generator);
         }
 
         //arrange an answer
@@ -424,9 +434,17 @@ namespace SIA {
         igraph_vector_init(result_matching,size);
         for (long i = 0; i < vcountA; i++) {
             igraph_vector_t neis;
-            igraph_vector_init(&neis,1);
+            igraph_vector_init(&neis,0);
             igraph_neighbors(&bigraph, &neis, i, IGRAPH_IN);
-            igraph_integer_t matched_id = VECTOR(neis)[0];
+            igraph_integer_t matched_id;
+            for (long j = 0; j < igraph_vector_size(&neis); j++) {
+                igraph_integer_t eid;
+                igraph_get_eid(&bigraph, &eid, VECTOR(neis)[j], i, true, true);
+                if (VECTOR(excess)[eid]==1) {
+                    matched_id = VECTOR(neis)[j];
+                    break;
+                }
+            }
             igraph_vector_destroy(&neis);
 
             VECTOR(*result_matching)[i] = matched_id;
@@ -441,7 +459,7 @@ namespace SIA {
         igraph_vector_long_destroy(&potentials);
         igraph_vector_long_destroy(&weights);
         igraph_vector_long_destroy(&excess);
-        igraph_vector_bool_destroy(&types);
+        igraph_vector_long_destroy(&node_excess);
     }
 
 }
