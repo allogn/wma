@@ -14,9 +14,6 @@
 namespace SIA {
 
     long INF = LONG_MAX;
-    typedef struct {
-        std::string message = "There is no path in a bipartite graph from a source node to a non-full target node";
-    } NO_PATH_ERROR;
     typedef fHeap<long> mmHeap;
 
     /*
@@ -271,7 +268,6 @@ namespace SIA {
      * - Inverted edges already must exist in the graph
      * - Ignore heap values as they will not be used anymore
      *
-     * Note that uniflow is possible for one iteration
      */
     long augmentFlow(igraph_t* bigraph,
                      igraph_vector_t* backtrack,
@@ -297,10 +293,6 @@ namespace SIA {
         igraph_vector_copy(&forward_vids, &backward_vids);
         igraph_vector_reverse(&forward_vids);
 
-        //current node contains the source node after while loop, so we change node_excess
-        VECTOR(*node_excess)[target] -= 1;
-        VECTOR(*node_excess)[current_node] += 1;
-
         igraph_es_t forward_es;
         igraph_es_t backward_es;
         igraph_es_pairs(&forward_es, &forward_vids, true);//directed graph
@@ -314,6 +306,8 @@ namespace SIA {
             min_excess = min(min_excess, VECTOR(*edge_excess)[eid]);
             IGRAPH_EIT_NEXT(eit);
         }
+        min_excess = min(min_excess, VECTOR(*node_excess)[target]);
+        min_excess = min(min_excess, -VECTOR(*node_excess)[current_node]);
 
         //iterate throw both paths and change excess
         IGRAPH_EIT_RESET(eit);
@@ -331,6 +325,10 @@ namespace SIA {
         }
         igraph_eit_destroy(&eit);
 
+        //current node contains the source node after while loop, so we change node_excess
+        VECTOR(*node_excess)[target] -= min_excess;
+        VECTOR(*node_excess)[current_node] += min_excess;
+
         igraph_vector_destroy(&backward_vids);
         igraph_vector_destroy(&forward_vids);
         return min_excess;
@@ -343,7 +341,7 @@ namespace SIA {
      * In fact there is one continuous Dijkstra execution that is iteratively terminated
      * or started depending on current results and a stream of new edges
      */
-    void matchVertex(igraph_t* bigraph, //residual bipartite graph
+    long matchVertex(igraph_t* bigraph, //residual bipartite graph
                      igraph_vector_long_t* node_excess,
                      igraph_vector_long_t* edge_excess,
                      igraph_vector_long_t* weights,
@@ -353,6 +351,9 @@ namespace SIA {
                      EdgeGenerator* edge_generator
     )
     {
+        if (VECTOR(*node_excess)[source_id] >= 0)
+            throw "Only nodes with negative excess can be matched";
+
 //        print_graph(bigraph, weights, edge_excess);
         //init heaps
         mmHeap gheap; //global heap stores information of the next not-added neighbor of vertices
@@ -377,7 +378,7 @@ namespace SIA {
             throw "No valid matching in the graph, out of additional nodes"; //no path in complete graph
         }
 
-        augmentFlow(bigraph, &backtrack, edge_excess, node_excess, potentials, result_vid);
+        long flowChange = augmentFlow(bigraph, &backtrack, edge_excess, node_excess, potentials, result_vid);
         updatePotentials(&mindist, potentials, result_vid);
 
 
@@ -385,6 +386,7 @@ namespace SIA {
         //free memory
         igraph_vector_long_destroy(&mindist);
         igraph_vector_destroy(&backtrack);
+        return flowChange;
     }
 
     /*
@@ -392,30 +394,22 @@ namespace SIA {
      *
      * No not pass bipartite graph, but a function that provides incremental edges
      */
-    void minMatch(long vcountA, long vcountB, long targetCapacity,
+    void minMatch(igraph_vector_long_t* node_excess,
                   EdgeGenerator* edge_generator,
                   long* result_weight,
-                  igraph_vector_t* result_matching)
+                  std::vector<std::vector<long>>& result_matching)
     {
-        long size = vcountA + vcountB;
+        long size = igraph_vector_long_size(node_excess);
         igraph_t bigraph;
         igraph_empty(&bigraph, size, true); //create directed graph
 
         igraph_vector_long_t potentials;
         igraph_vector_long_t weights;
         igraph_vector_long_t excess;
-        igraph_vector_long_t node_excess;
 
         igraph_vector_long_init(&potentials,size);
         igraph_vector_long_init(&weights, 0);
         igraph_vector_long_init(&excess, 0);
-        igraph_vector_long_init(&node_excess, size);
-
-        igraph_vector_long_fill(&potentials, 0);
-        igraph_vector_long_fill(&node_excess, 1);
-        for (long i = 0; i < vcountA; i++) {
-            VECTOR(node_excess)[i] = -1;
-        }
 
         //init with a first nearest neighbor for all vertices
         newEdges nearest_edges;
@@ -424,42 +418,53 @@ namespace SIA {
             nearest_edges.push_back(e);
         }
 
-        for (long i = 0; i < vcountA; i++) {
-            matchVertex(&bigraph, &node_excess, &excess, &weights, &potentials,
-                        i, nearest_edges, edge_generator);
+        long source_count;
+        for (long i = 0; i < size; i++) {
+            if (VECTOR(*node_excess)[i] >= 0) {
+                source_count = i;
+                break;
+            }
+        }
+
+        long source_id = 0;
+        long prev_id = -1;
+        //round-robin
+        while (source_id != prev_id) {
+            if (VECTOR(*node_excess)[source_id] < 0) {
+                matchVertex(&bigraph, node_excess, &excess, &weights, &potentials,
+                            source_id, nearest_edges, edge_generator);
+                prev_id = source_id;
+            }
+            source_id = (source_id+1) % source_count;
         }
 
         //arrange an answer
         *result_weight = 0;
-        igraph_vector_init(result_matching,size);
-        for (long i = 0; i < vcountA; i++) {
+        if (result_matching.size() != size) {
+            throw "Result matching vector must be initialized with empty vectors for each vertex";
+        }
+        for (long i = 0; i < source_count; i++) {
             igraph_vector_t neis;
             igraph_vector_init(&neis,0);
             igraph_neighbors(&bigraph, &neis, i, IGRAPH_IN);
             igraph_integer_t matched_id;
+            //there can be many matched vertices because of capacities
             for (long j = 0; j < igraph_vector_size(&neis); j++) {
                 igraph_integer_t eid;
                 igraph_get_eid(&bigraph, &eid, VECTOR(neis)[j], i, true, true);
-                if (VECTOR(excess)[eid]==1) {
+                if (VECTOR(excess)[eid]>0) {
                     matched_id = VECTOR(neis)[j];
-                    break;
+                    result_matching[i].push_back(matched_id);
+                    result_matching[matched_id].push_back(i);
+                    *result_weight -= VECTOR(weights)[eid];
                 }
             }
             igraph_vector_destroy(&neis);
-
-            VECTOR(*result_matching)[i] = matched_id;
-            VECTOR(*result_matching)[matched_id] = i;
-
-            //get corresponding edge
-            igraph_integer_t eid;
-            igraph_get_eid(&bigraph,&eid,i,matched_id,true,true); //true,true = directed graph, report errors
-            *result_weight += VECTOR(weights)[eid];
         }
 
         igraph_vector_long_destroy(&potentials);
         igraph_vector_long_destroy(&weights);
         igraph_vector_long_destroy(&excess);
-        igraph_vector_long_destroy(&node_excess);
     }
 
 }

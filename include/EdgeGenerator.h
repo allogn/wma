@@ -42,6 +42,9 @@ public:
     };
 };
 
+/*
+ * Loads file with edgeMemory (edge queue) and throws all edges sequentially
+ */
 class LoadedEdgeGenerator : public EdgeGenerator {
 public:
     newEdges edgeQueue;
@@ -103,13 +106,16 @@ public:
     std::vector<std::vector<long>> neighbors;
     std::vector<long> next_neighbor_id;
     igraph_rng_t rng;
+    long capacity;
 
     /*
      * Create a generator for n nodes
      *
-     * Specify a range for target nodes
+     * Specify a range for target nodes and capacity of target nodes
+     * Every edge will have a capacity equal to capacity of a target node
      */
-    RandomEdgeGenerator(long n, long target_start_vid, long target_vcount) {
+    RandomEdgeGenerator(long n, long target_start_vid, long target_vcount, long target_capacity) {
+        this->capacity = target_capacity;
         this->n = n;
         prev_weights.resize(n,0);
 
@@ -147,7 +153,7 @@ public:
             new_edge.weight = igraph_rng_get_integer(&rng, prev_weights[vid], prev_weights[vid]+100);
             new_edge.target_node = neighbors[vid][next_neighbor_id[vid]++];
             new_edge.exists = true;
-            new_edge.capacity = 1;
+            new_edge.capacity = this->capacity;
             edgeMemory.push_back(new_edge);
             prev_weights[vid] = new_edge.weight;
         } else {

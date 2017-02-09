@@ -251,7 +251,7 @@ BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
     igraph_vector_long_t excess;
     long excess_array[10] = {9, 2, 9, 0, 0, 0, 10, 10, 10, 10};
     igraph_vector_long_t node_excess;
-    long node_excess_array[5] = {-1, -1, 0, 1, 1};
+    long node_excess_array[5] = {-2, -2, 0, 2, 2};
 
     igraph_vector_t backtrack;
     igraph_real_t bct_array[5] = {0, 0, 1, 2, 2};
@@ -293,24 +293,31 @@ BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
 BOOST_AUTO_TEST_CASE (testMatching) {
     // test symetric matching for a set of random graphs using igraph matching
     int counter = 0;
-    while(counter++ < 5) {
-        long half_size = counter+40;
-        RandomEdgeGenerator* egg = new RandomEdgeGenerator(half_size, half_size, half_size);
+    while(counter++ < 1) {
+        long half_size = counter+1;
+        RandomEdgeGenerator* egg = new RandomEdgeGenerator(half_size, half_size, half_size, 1);
 //        LoadedEdgeGenerator* egg = new LoadedEdgeGenerator("/Users/alvis/PhD/fcla/bin/egg.txt");
         long result_weight;
-        igraph_vector_t result_matching;
-        minMatch(half_size, half_size, 1, egg, &result_weight, &result_matching);
+        std::vector<std::vector<long>> result_matching;
+        for (long i = 0; i < half_size*2; i++) {
+            std::vector<long> vec;
+            result_matching.push_back(vec);
+        }
+        //init capacities (excess)
+        igraph_vector_long_t node_excess;
+        igraph_vector_long_init(&node_excess, half_size*2);
+        igraph_vector_long_fill(&node_excess, 1);
+        for (long i = 0; i< half_size; i++) {
+            VECTOR(node_excess)[i] = -1;
+        }
+        minMatch(&node_excess, egg, &result_weight, result_matching);
 
         //build igraph based on edges in EdgeGenerator and transform minmatch to maxmatch problem
         igraph_t test_graph;
-        igraph_vector_long_t node_excess;
         igraph_vector_bool_t types;
-        igraph_vector_long_init(&node_excess, half_size*2);
         igraph_vector_bool_init(&types, half_size*2); //used for igraph_matching
-        igraph_vector_long_fill(&node_excess, 1);
         igraph_vector_bool_fill(&types, true);
         for (long i = 0; i < half_size; i++) {
-            VECTOR(node_excess)[i] = -1;
             VECTOR(types)[i] = false;
         }
         igraph_vector_t weights;
@@ -331,7 +338,7 @@ BOOST_AUTO_TEST_CASE (testMatching) {
                 e = egg->getEdge(i);
             }
         }
-        egg->save("egg.txt");
+//        egg->save("egg.txt");
         //reverse and lift weights
         long max_w = igraph_vector_max(&weights);
         for (long i = 0; i < igraph_vector_size(&weights); i++) {
@@ -347,10 +354,36 @@ BOOST_AUTO_TEST_CASE (testMatching) {
 
         delete egg;
         igraph_vector_destroy(&weights);
-        igraph_vector_long_destroy(&node_excess);
         igraph_vector_bool_destroy(&types);
         igraph_destroy(&test_graph);
         igraph_vector_long_destroy(&matching);
-        igraph_vector_destroy(&result_matching);
+        igraph_vector_long_destroy(&node_excess);
     }
+}
+
+BOOST_AUTO_TEST_CASE (multicapacityTest) {
+
+    long source_n = 2;
+    long target_n = 4;
+    long target_capacity = 2;
+    long source_capacity = 1;
+    long total_size = source_n + target_n;
+
+    RandomEdgeGenerator* egg = new RandomEdgeGenerator(source_n, source_n, target_n, target_capacity);
+
+    long result_weight;
+    std::vector<std::vector<long>> result_matching;
+    for (long i = 0; i < total_size; i++) {
+        std::vector<long> vec;
+        result_matching.push_back(vec);
+    }
+    //init capacities (excess)
+    igraph_vector_long_t node_excess;
+    igraph_vector_long_init(&node_excess, total_size);
+    igraph_vector_long_fill(&node_excess, target_capacity);
+    for (long i = 0; i< source_n; i++) {
+        VECTOR(node_excess)[i] = -source_capacity;
+    }
+    minMatch(&node_excess, egg, &result_weight, result_matching);
+
 }
