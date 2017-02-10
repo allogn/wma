@@ -38,7 +38,7 @@ inline long intWeightFromCoords(double x1, double y1, double x2, double y2) {
 int generate_random_geometric_graph(long size,
                                     double density, //from 0 to 1
                                     igraph_t* result_graph,
-                                    igraph_vector_long_t* weights,
+                                    std::vector<long>& weights,
                                     igraph_vector_t* x,
                                     igraph_vector_t* y)
 {
@@ -47,20 +47,19 @@ int generate_random_geometric_graph(long size,
     int res = igraph_grg_game(result_graph, size, density, false, x, y); //false goes for square area instead of torus
     //calculate integer weights
     igraph_integer_t ec = igraph_ecount(result_graph);
-    igraph_vector_long_init(weights, ec);
+    weights.resize(ec);
     for (igraph_integer_t i = 0; i < ec; i++) {
         igraph_integer_t from, to;
         igraph_edge(result_graph, i, &from, &to);
-        igraph_vector_long_set(weights, i, intWeightFromCoords(VECTOR(*x)[from], VECTOR(*y)[from], VECTOR(*x)[to], VECTOR(*y)[to]));
+        weights[i] = intWeightFromCoords(VECTOR(*x)[from], VECTOR(*y)[from], VECTOR(*x)[to], VECTOR(*y)[to]);
     }
     return res; //error code from igraph generator
 }
 
 /*
- * Make directed graph, input uninitialized
+ * Make directed graph, input initialized
  */
 void make_directed(igraph_t* undirected, igraph_t* directed) {
-    igraph_empty(directed, igraph_vcount(undirected), true);
     for (igraph_integer_t i = 0; i < igraph_ecount(undirected); i++) {
         igraph_integer_t from;
         igraph_integer_t to;

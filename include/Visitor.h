@@ -1,5 +1,5 @@
 //
-// Created by allogn on 18.01.17.
+// A supplementary class for RoadNetwork OSM parser (provides callbacks)
 //
 
 #ifndef FCLA_VISITOR_H

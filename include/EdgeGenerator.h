@@ -68,16 +68,17 @@ public:
         }
     }
 
-    EdgeGenerator() {};
-    virtual ~EdgeGenerator() {};
+    EdgeGenerator() {}
+    virtual ~EdgeGenerator() {}
     virtual bool isComplete(long vid) {
         return true;
-    };
+    }
     virtual newEdge getEdge(igraph_integer_t vid) {
         newEdge e;
         e.exists = false;
         return e;
-    };
+    }
+    virtual void reset() {}
 };
 
 /*
@@ -92,6 +93,7 @@ public:
     }
     ~LoadedEdgeGenerator() {}
     void load(std::string filename) {
+        edgeMemory.clear();
         ifstream f(filename);
         if (!f.is_open())
             throw "File does not exist";
@@ -137,6 +139,10 @@ public:
 
     bool isComplete(long vid) override {
         return true; //a node for the loaded graph is always assumed to contain all outgoing edges
+    }
+
+    void reset() override {
+        edgeQueue = edgeMemory;
     }
 };
 
@@ -207,6 +213,11 @@ public:
 
     bool isComplete(long vid) override {
         return next_neighbor_id[vid] == neighbors[vid].size();
+    }
+
+    void reset() override {
+        prev_weights.resize(n,0);
+        next_neighbor_id.resize(n, 0);
     }
 };
 
