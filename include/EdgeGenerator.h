@@ -6,6 +6,10 @@
 #define FCLA_EDGEGENERATOR_H
 
 #include <igraph/igraph.h>
+#include <lemon/list_graph.h>
+#include <vector>
+#include <set>
+#include <algorithm>
 
 typedef struct {
     bool exists; //flag if there is any new edge to be added
@@ -18,6 +22,7 @@ typedef std::vector<newEdge> newEdges;
 
 class EdgeGenerator {
 public:
+    long n; //number of vertices for generation
     newEdges edgeMemory;
 
     void save(std::string filename) {
@@ -33,8 +38,41 @@ public:
         f.close();
     }
 
+    void makeComplete() {
+        for (long i = 0; i < this->n; i++) {
+            while (!isComplete(i)) {
+                getEdge(i);
+            }
+        }
+    }
+
+    void makeLemon(lemon::ListDigraph* g,
+                   lemon::ListDigraph::ArcMap<long>* capacities,
+                   lemon::ListDigraph::ArcMap<long>* weights) {
+        this->makeComplete();
+        std::vector<lemon::ListDigraph::Node> nodes;
+        std::set<long> nodenum;
+        //calculate nodes
+        for (long i = 0; i < edgeMemory.size(); i++) {
+            nodenum.insert(edgeMemory[i].source_node);
+            nodenum.insert(edgeMemory[i].target_node);
+        }
+        for (long i = 0; i < nodenum.size(); i++) {
+            lemon::ListDigraph::Node node = g->addNode();
+            nodes.push_back(node);
+        }
+        for (long i = 0; i < edgeMemory.size(); i++) {
+            lemon::ListDigraph::Arc e = g->addArc(nodes[edgeMemory[i].source_node], nodes[edgeMemory[i].target_node]);
+            (*capacities)[e] = edgeMemory[i].capacity;
+            (*weights)[e] = edgeMemory[i].weight;
+        }
+    }
+
     EdgeGenerator() {};
     virtual ~EdgeGenerator() {};
+    virtual bool isComplete(long vid) {
+        return true;
+    };
     virtual newEdge getEdge(igraph_integer_t vid) {
         newEdge e;
         e.exists = false;
@@ -49,6 +87,7 @@ class LoadedEdgeGenerator : public EdgeGenerator {
 public:
     newEdges edgeQueue;
     LoadedEdgeGenerator(std::string filename) {
+        this->n = 0;
         this->load(filename);
     }
     ~LoadedEdgeGenerator() {}
@@ -77,6 +116,7 @@ public:
             e.source_node = vect[3];
             e.weight = vect[4];
             edgeMemory.push_back(e);
+            this->n = max(n, (long)e.source_node);
         }
         f.close();
         edgeQueue = edgeMemory;
@@ -94,6 +134,10 @@ public:
         new_edge.exists = false;
         return new_edge;
     }
+
+    bool isComplete(long vid) override {
+        return true; //a node for the loaded graph is always assumed to contain all outgoing edges
+    }
 };
 
 /*
@@ -101,7 +145,6 @@ public:
  */
 class RandomEdgeGenerator : public EdgeGenerator {
 public:
-    long n;
     std::vector<long> prev_weights;
     std::vector<std::vector<long>> neighbors;
     std::vector<long> next_neighbor_id;
@@ -148,7 +191,7 @@ public:
      */
     newEdge getEdge(igraph_integer_t vid) override {
         newEdge new_edge;
-        if (vid < n && next_neighbor_id[vid] < neighbors[vid].size()) {
+        if (vid < n && !isComplete(vid)) {
             new_edge.source_node = vid;
             new_edge.weight = igraph_rng_get_integer(&rng, prev_weights[vid], prev_weights[vid]+100);
             new_edge.target_node = neighbors[vid][next_neighbor_id[vid]++];
@@ -160,6 +203,10 @@ public:
             new_edge.exists = false;
         }
         return new_edge;
+    }
+
+    bool isComplete(long vid) override {
+        return next_neighbor_id[vid] == neighbors[vid].size();
     }
 };
 

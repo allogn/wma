@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <igraph/igraph.h>
+#include <lemon/list_graph.h>
 
 #define WEIGHT_ERROR 0.001
 
@@ -114,6 +115,27 @@ void print_graph(igraph_t* graph, igraph_vector_long_t* weights, igraph_vector_l
         }
     }
     igraph_vector_destroy(&eids);
+    std::cout << "-----------\n\n";
+}
+
+void print_graph(lemon::ListDigraph* g,
+                 lemon::ListDigraph::ArcMap<long>* weights,
+                 lemon::ListDigraph::ArcMap<long>* edge_excess) {
+    std::cout << "-----------" << std::endl;
+    for (lemon::ListDigraph::NodeIt nit(*g); nit != lemon::INVALID; ++nit) {
+        std::cout << g->id(nit) << ": ";
+        std::cout << "OUT: ";
+        for (lemon::ListDigraph::OutArcIt eit(*g, nit); eit != lemon::INVALID; ++eit) {
+            std::cout << g->id(g->source(eit)) << "->" << g->id(g->target(eit))
+                      << "(" << (*weights)[eit] << "," << (*edge_excess)[eit] << "),";
+        }
+        std::cout << ";IN: ";
+        for (lemon::ListDigraph::InArcIt eit(*g, nit); eit != lemon::INVALID; ++eit) {
+            std::cout << g->id(g->source(eit)) << "->" << g->id(g->target(eit))
+                      << "(" << (*weights)[eit] << "," << (*edge_excess)[eit] << "),";
+        }
+        std::cout << std::endl;
+    }
     std::cout << "-----------\n\n";
 }
 

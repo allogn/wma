@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <time.h>
 #include <EdgeGenerator.h>
+#include <lemon/list_graph.h>
+#include <lemon/cost_scaling.h>
 #include "helpers.h"
 #include "Bipartite.h"
 
@@ -323,20 +325,11 @@ BOOST_AUTO_TEST_CASE (testMatching) {
         igraph_vector_t weights;
         igraph_vector_init(&weights,0);
         igraph_empty(&test_graph, half_size*2, true);
+        egg->makeComplete();
         for (long i = 0; i < egg->edgeMemory.size(); i++) {
             newEdge e = egg->edgeMemory[i];
             igraph_add_edge(&test_graph, e.source_node, e.target_node);
             igraph_vector_push_back(&weights, e.weight);
-        }
-        //fill graph with non-added edges until full
-        for (long i = 0; i < half_size; i++) {
-            newEdge e;
-            e = egg->getEdge(i);
-            while (e.exists) {
-                igraph_add_edge(&test_graph, e.source_node, e.target_node);
-                igraph_vector_push_back(&weights, e.weight);
-                e = egg->getEdge(i);
-            }
         }
 //        egg->save("egg.txt");
         //reverse and lift weights
@@ -362,28 +355,70 @@ BOOST_AUTO_TEST_CASE (testMatching) {
 }
 
 BOOST_AUTO_TEST_CASE (multicapacityTest) {
+//    while(true) {
+        long source_n = 24;
+        long target_n = 36;
+        long target_capacity = 2;
+        long source_capacity = 3;
+        long total_size = source_n + target_n;
+//        LoadedEdgeGenerator* egg = new LoadedEdgeGenerator("/Users/alvis/PhD/fcla/bin/egg.txt");
+        RandomEdgeGenerator *egg = new RandomEdgeGenerator(source_n, source_n, target_n, target_capacity);
 
-    long source_n = 2;
-    long target_n = 4;
-    long target_capacity = 2;
-    long source_capacity = 1;
-    long total_size = source_n + target_n;
+        long result_weight;
+        std::vector<std::vector<long>> result_matching;
+        for (long i = 0; i < total_size; i++) {
+            std::vector<long> vec;
+            result_matching.push_back(vec);
+        }
+        //init capacities (excess)
+        igraph_vector_long_t node_excess;
+        igraph_vector_long_init(&node_excess, total_size);
+        igraph_vector_long_fill(&node_excess, target_capacity);
+        for (long i = 0; i < source_n; i++) {
+            VECTOR(node_excess)[i] = -source_capacity;
+        }
+        minMatch(&node_excess, egg, &result_weight, result_matching);
+        //calculate resulting cost of matching
 
-    RandomEdgeGenerator* egg = new RandomEdgeGenerator(source_n, source_n, target_n, target_capacity);
+//        egg->save("egg.txt");
 
-    long result_weight;
-    std::vector<std::vector<long>> result_matching;
-    for (long i = 0; i < total_size; i++) {
-        std::vector<long> vec;
-        result_matching.push_back(vec);
-    }
-    //init capacities (excess)
-    igraph_vector_long_t node_excess;
-    igraph_vector_long_init(&node_excess, total_size);
-    igraph_vector_long_fill(&node_excess, target_capacity);
-    for (long i = 0; i< source_n; i++) {
-        VECTOR(node_excess)[i] = -source_capacity;
-    }
-    minMatch(&node_excess, egg, &result_weight, result_matching);
 
+        long totalFlow = min(source_n * source_capacity, target_n * target_capacity);
+
+        //create lemon graph and solve mincost
+        lemon::ListDigraph g;
+        lemon::ListDigraph::ArcMap<long> capacities(g);
+        lemon::ListDigraph::ArcMap<long> weights(g);
+        egg->makeLemon(&g, &capacities, &weights);
+        //add additional source and destination nodes
+        lemon::ListDigraph::Node source = g.addNode();
+        lemon::ListDigraph::Node target = g.addNode();
+        //if a node has at least one outgoing edge, then this node is a source node
+        for (lemon::ListDigraph::NodeIt nodeit(g); nodeit != lemon::INVALID; ++nodeit) {
+            if ((g.id(nodeit) == g.id(source)) || (g.id(nodeit) == g.id(target))) continue;
+            lemon::ListDigraph::OutArcIt eit(g, nodeit);
+            if (eit != lemon::INVALID) {
+                //this is source node
+                lemon::ListDigraph::Arc e = g.addArc(source, nodeit);
+                capacities[e] = source_capacity;
+                weights[e] = 0;
+            } else {
+                lemon::ListDigraph::Arc e = g.addArc(nodeit, target);
+                capacities[e] = target_capacity;
+                weights[e] = 0;
+            }
+        }
+        lemon::CostScaling<lemon::ListDigraph, long, long> cost_scaling_alg(g);
+        cost_scaling_alg.upperMap(capacities);
+        cost_scaling_alg.costMap(weights);
+        cost_scaling_alg.stSupply(source, target, totalFlow);
+//        print_graph(&g, &weights, &capacities);
+        lemon::CostScaling<lemon::ListDigraph, long, long>::ProblemType pt = cost_scaling_alg.run();
+        if (pt != lemon::CostScaling<lemon::ListDigraph, long, long>::ProblemType::OPTIMAL) {
+            throw "Cost Scaling graph is infeasible";
+        }
+
+        //compare results
+        BOOST_REQUIRE_EQUAL(cost_scaling_alg.totalCost(), result_weight);
+//    }
 }

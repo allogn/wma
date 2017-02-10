@@ -368,7 +368,7 @@ namespace SIA {
         //if a node was not yet visited, then we should enheap the value from nearest_edges
         //this is done in dijkstra, because gheap is updated by the current value from nearest_edges if mindist is updated
         if (nearest_edges[source_id].exists) //otherwise all edges were already added, but everything is still fine
-            gheap.enqueue(source_id, heapedCost(nearest_edges[source_id].weight, 0, 0));
+            gheap.enqueue(source_id, heapedCost(nearest_edges[source_id].weight, VECTOR(*potentials)[source_id], 0));
 
         //enlarge graph until valid path is found, or throw an exception
         igraph_integer_t result_vid;
@@ -430,7 +430,7 @@ namespace SIA {
         long prev_id = -1;
         //round-robin
         while (source_id != prev_id) {
-            if (VECTOR(*node_excess)[source_id] < 0) {
+            while (VECTOR(*node_excess)[source_id] < 0) {
                 matchVertex(&bigraph, node_excess, &excess, &weights, &potentials,
                             source_id, nearest_edges, edge_generator);
                 prev_id = source_id;
@@ -456,7 +456,7 @@ namespace SIA {
                     matched_id = VECTOR(neis)[j];
                     result_matching[i].push_back(matched_id);
                     result_matching[matched_id].push_back(i);
-                    *result_weight -= VECTOR(weights)[eid];
+                    *result_weight -= VECTOR(weights)[eid]*VECTOR(excess)[eid];
                 }
             }
             igraph_vector_destroy(&neis);

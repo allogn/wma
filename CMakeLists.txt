@@ -25,6 +25,7 @@ endif()
 # include pbf reader
 include_directories(${CMAKE_SOURCE_DIR}/lib/OSM-binary/build/include)
 include_directories(${CMAKE_SOURCE_DIR}/lib/libosmpbfreader/)
+include_directories(${CMAKE_SOURCE_DIR}/lib/lemon-1.3.1/lib/include)
 set(OSMPBF_LINK_LIBS ${CMAKE_SOURCE_DIR}/lib/OSM-binary/build/lib/libosmpbf.so)
 
 find_package(ZLIB REQUIRED)
@@ -48,6 +49,6 @@ add_executable(simple_tests tests/simple_tests.cpp)
 target_link_libraries(simple_tests ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
 
 add_executable(SIA_tests tests/SIA_tests.cpp)
-target_link_libraries(SIA_tests ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};)
+target_link_libraries(SIA_tests ${Boost_LIBRARIES};)#${IGRAPH_LINK_LIBS};${LEMON_LINK_LIBS})
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
