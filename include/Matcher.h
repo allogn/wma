@@ -9,6 +9,7 @@
 #include <vector>
 #include <igraph/igraph.h>
 #include <limits>
+#include <algorithm>
 #include "nheap.h"
 #include "helpers.h"
 #include "EdgeGenerator.h"
@@ -79,17 +80,23 @@ public:
                 throw "Node Excess array must contain first sources, then targets";
             }
         }
+        mindist.resize(graph_size);
+        backtrack.resize(graph_size);
     }
 
     //for testing purposes
     Matcher(I graph_size) {
         this->graph_size = graph_size;
         igraph_empty(&graph, graph_size, true);
+        mindist.resize(graph_size);
+        backtrack.resize(graph_size);
     }
 
     Matcher(igraph_t* g) {
         igraph_copy(g, &graph);
         this->graph_size = igraph_vcount(g);
+        mindist.resize(graph_size);
+        backtrack.resize(graph_size);
     }
 
     Matcher(EdgeGenerator* edge_generator, std::vector<W>& node_excess) {
@@ -150,10 +157,10 @@ public:
         dheap.clear(); //heap used in Dijkstra
 
         //initialize heaps and vectors according to a source node
-        mindist.resize(graph_size, INF_W);
+        std::fill(mindist.begin(),mindist.end(), INF_W);
         mindist[source_id] = 0;
 
-        backtrack.resize(graph_size, -1);
+        std::fill(backtrack.begin(), backtrack.end(), -1);
         backtrack[source_id] = source_id;
 
         //enqueue first node into Dijktra heap
@@ -396,7 +403,7 @@ public:
         F flowChange = augmentFlow(result_vid);
         updatePotentials(result_vid);
 
-//        print_graph(bi&graph, weights, edge_excess);
+//        print_graph<W,F>(&graph, weights, edge_excess);
         return flowChange;
     }
 
@@ -416,7 +423,20 @@ public:
             }
             source_id = (source_id+1) % source_count;
         }
+    }
 
+    /*
+     * Increase the demand of a particular customer
+     */
+    void increaseCapacity(I vid) {
+        this->node_excess[vid] -= 1;
+        //before capacity was changed, all excesses were zero. Then, one changed
+        //As a result of matchVertex routine, no any other vertex can loose its matching
+        //because any path is "continuous"
+        matchVertex(vid);
+    }
+
+    void calculateResult() {
         //arrange an answer
         result_weight = 0;
         for (I i = 0; i < source_count; i++) {

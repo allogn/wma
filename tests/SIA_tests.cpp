@@ -69,6 +69,7 @@ BOOST_AUTO_TEST_CASE (dijkstra_random_test) {
 
     M.node_excess.resize(M.graph_size, -1);
     M.node_excess[max_ind] = 1;
+    M.edge_excess.resize(igraph_ecount(&M.graph),1);
 
     M.new_edges.resize(M.graph_size);
     for (int i = 0; i < M.graph_size; i++) M.new_edges[i].exists = false;
@@ -210,9 +211,9 @@ BOOST_AUTO_TEST_CASE (FlowAndPotentialsTest) {
 
 BOOST_AUTO_TEST_CASE (testMatching) {
     // test symetric matching for a set of random graphs using igraph matching
-    int counter = 0;
-    while(counter++ < 1) {
-        long half_size = counter+1;
+    int counter = 20;
+    while(counter++ < 3) {
+        long half_size = counter+10;
         RandomEdgeGenerator* egg = new RandomEdgeGenerator(half_size, half_size, half_size, 1);
 //        LoadedEdgeGenerator* egg = new LoadedEdgeGenerator("/Users/alvis/PhD/fcla/bin/egg.txt");
 
@@ -223,6 +224,7 @@ BOOST_AUTO_TEST_CASE (testMatching) {
         }
         Matcher<long,long,long> M(egg, node_excess);
         M.run();
+        M.calculateResult();
 
         //build igraph based on edges in EdgeGenerator and transform minmatch to maxmatch problem
         igraph_t test_graph;
@@ -263,25 +265,7 @@ BOOST_AUTO_TEST_CASE (testMatching) {
     }
 }
 
-BOOST_AUTO_TEST_CASE (multicapacityTest) {
-    long source_n = 24;
-    long target_n = 36;
-    long target_capacity = 2;
-    long source_capacity = 3;
-    long total_size = source_n + target_n;
-//        LoadedEdgeGenerator* egg = new LoadedEdgeGenerator("/Users/alvis/PhD/fcla/bin/egg.txt");
-    RandomEdgeGenerator *egg = new RandomEdgeGenerator(source_n, source_n, target_n, target_capacity);
-
-    std::vector<long> node_excess(total_size, target_capacity);
-    for (long i = 0; i < source_n; i++) {
-        node_excess[i] = -source_capacity;
-    }
-    Matcher<long,long,long> M(egg, node_excess);
-    M.run();
-
-    //calculate resulting cost of matching
-    long totalFlow = min(source_n * source_capacity, target_n * target_capacity);
-
+long testFlowMatchingSD(EdgeGenerator* egg, long totalFlow, std::vector<long>& source_capacities, long target_capacity) {
     //create lemon graph and solve mincost
     lemon::ListDigraph g;
     lemon::ListDigraph::ArcMap<long> capacities(g);
@@ -297,7 +281,7 @@ BOOST_AUTO_TEST_CASE (multicapacityTest) {
         if (eit != lemon::INVALID) {
             //this is source node
             lemon::ListDigraph::Arc e = g.addArc(source, nodeit);
-            capacities[e] = source_capacity;
+            capacities[e] = source_capacities[g.id(nodeit)];
             weights[e] = 0;
         } else {
             lemon::ListDigraph::Arc e = g.addArc(nodeit, target);
@@ -315,7 +299,43 @@ BOOST_AUTO_TEST_CASE (multicapacityTest) {
         throw "Cost Scaling graph is infeasible";
     }
 
+    return cost_scaling_alg.totalCost();
+}
+
+BOOST_AUTO_TEST_CASE (multicapacityTest) {
+    long source_n = 23;
+    long target_n = 75;
+    long target_capacity = 2;
+    long source_capacity = 3;
+    long total_size = source_n + target_n;
+//        LoadedEdgeGenerator* egg = new LoadedEdgeGenerator("/Users/alvis/PhD/fcla/bin/egg.txt");
+    RandomEdgeGenerator *egg = new RandomEdgeGenerator(source_n, source_n, target_n, target_capacity);
+
+    std::vector<long> node_excess(total_size, target_capacity);
+    for (long i = 0; i < source_n; i++) {
+        node_excess[i] = -source_capacity;
+    }
+    Matcher<long,long,long> M(egg, node_excess);
+    M.run();
+    M.calculateResult();
+//        egg->save("egg.txt");
+
+    //calculate resulting cost of matching
+    long totalFlow = min(source_n * source_capacity, target_n * target_capacity);
+    std::vector<long> source_capacities(source_n, source_capacity);
+    long testMatching = testFlowMatchingSD(egg, totalFlow, source_capacities, target_capacity);
+
     //compare results
-    BOOST_REQUIRE_EQUAL(cost_scaling_alg.totalCost(), M.result_weight);
+    BOOST_REQUIRE_EQUAL(testMatching, M.result_weight);
+
+    //test source capacity increase
+    for (int i = 0; i < 1; i++) {
+        M.increaseCapacity(i % source_n);
+        source_capacities[i % source_n] += 1;
+        M.calculateResult();
+        totalFlow += 1;
+        //note that all customers MUST be assigned, so there should be strongly hreater number of services
+        BOOST_CHECK_EQUAL(testFlowMatchingSD(egg, totalFlow, source_capacities, target_capacity), M.result_weight);
+    }
 }
 

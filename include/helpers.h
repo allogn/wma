@@ -68,16 +68,18 @@ void make_directed(igraph_t* undirected, igraph_t* directed) {
     }
 }
 
-std::string edge_str(igraph_t* graph, igraph_vector_long_t* weights, igraph_vector_long_t* excess, igraph_integer_t eid) {
+template<typename W, typename F>
+std::string edge_str(igraph_t* graph, std::vector<W>& weights, std::vector<F>& excess, igraph_integer_t eid) {
     std::ostringstream res;
     igraph_integer_t from;
     igraph_integer_t to;
     igraph_edge(graph, eid, &from, &to);
-    res << from << " - " << to << "(" << VECTOR(*weights)[eid] << "," << VECTOR(*excess)[eid] <<")";
+    res << from << " - " << to << "(" << weights[eid] << "," << excess[eid] <<")";
     return res.str();
 }
 
-void print_graph(igraph_t* graph, igraph_vector_long_t* weights, igraph_vector_long_t* excess) {
+template<typename W, typename F>
+void print_graph(igraph_t* graph, std::vector<W>& weights, std::vector<F>& excess) {
     std::cout << "-----------" << std::endl;
     if (igraph_is_directed(graph)) {
         std::cout << "Directed graph" << std::endl;

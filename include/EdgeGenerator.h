@@ -41,7 +41,7 @@ public:
     void makeComplete() {
         for (long i = 0; i < this->n; i++) {
             while (!isComplete(i)) {
-                getEdge(i);
+                getEdge(i); //add to memory and return new edge
             }
         }
     }
