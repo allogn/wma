@@ -51,4 +51,7 @@ target_link_libraries(simple_tests ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};${OSMP
 add_executable(SIA_tests tests/SIA_tests.cpp)
 target_link_libraries(SIA_tests ${Boost_LIBRARIES};)#${IGRAPH_LINK_LIBS};${LEMON_LINK_LIBS})
 
+add_executable(fcla_tests tests/fcla_tests.cpp)
+target_link_libraries(fcla_tests ${Boost_LIBRARIES};)
+
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

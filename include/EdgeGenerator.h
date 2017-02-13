@@ -10,6 +10,7 @@
 #include <vector>
 #include <set>
 #include <algorithm>
+#include <iostream>
 
 typedef struct {
     bool exists; //flag if there is any new edge to be added
@@ -26,14 +27,14 @@ public:
     newEdges edgeMemory;
 
     void save(std::string filename) {
-        ofstream f;
+        std::ofstream f;
         f.open(filename,std::ofstream::out);
         for (long i = 0; i < edgeMemory.size(); i++) {
             f << edgeMemory[i].exists << ","
               << edgeMemory[i].target_node << ","
               << edgeMemory[i].capacity << ","
               << edgeMemory[i].source_node << ","
-              << edgeMemory[i].weight << endl;
+              << edgeMemory[i].weight << std::endl;
         }
         f.close();
     }
@@ -73,7 +74,7 @@ public:
     virtual bool isComplete(long vid) {
         return true;
     }
-    virtual newEdge getEdge(igraph_integer_t vid) {
+    virtual newEdge getEdge(long vid) {
         newEdge e;
         e.exists = false;
         return e;
@@ -94,7 +95,7 @@ public:
     ~LoadedEdgeGenerator() {}
     void load(std::string filename) {
         edgeMemory.clear();
-        ifstream f(filename);
+        std::ifstream f(filename);
         if (!f.is_open())
             throw "File does not exist";
         std::string line;
@@ -118,13 +119,13 @@ public:
             e.source_node = vect[3];
             e.weight = vect[4];
             edgeMemory.push_back(e);
-            this->n = max(n, (long)e.source_node);
+            this->n = std::max(n, (long)e.source_node);
         }
         f.close();
         edgeQueue = edgeMemory;
     }
 
-    newEdge getEdge(igraph_integer_t vid) override {
+    newEdge getEdge(long vid) override {
         for (long i = 0; i < this->edgeQueue.size(); i++) {
             if (edgeQueue[i].source_node == vid) {
                 newEdge e = edgeQueue[i];
@@ -195,7 +196,7 @@ public:
      *
      * return non-existing edge for n larger than the one used in initialization
      */
-    newEdge getEdge(igraph_integer_t vid) override {
+    newEdge getEdge(long vid) override {
         newEdge new_edge;
         if (vid < n && !isComplete(vid)) {
             new_edge.source_node = vid;
@@ -216,6 +217,7 @@ public:
     }
 
     void reset() override {
+        edgeMemory.clear();
         prev_weights.resize(n,0);
         next_neighbor_id.resize(n, 0);
     }

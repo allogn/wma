@@ -182,7 +182,7 @@ public:
         } else
             num_elems--;
 
-        return 1;
+        return idx;
     };
 
     bool dequeue(I &idx, V &value) {
@@ -203,6 +203,11 @@ public:
 
         return true;
     };
+
+    V getVal(I idx) {
+        I posel = order[idx];
+        return heap[posel].value;
+    }
 
     void updatequeue(I idx, V new_val) {
         I posel;
