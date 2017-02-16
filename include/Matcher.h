@@ -63,14 +63,6 @@ public:
             result_matching.push_back(vec);
         }
 
-        //init with a first nearest neighbor for all vertices
-        edge_generator->reset();
-        new_edges.clear();
-        for (I i = 0; i < graph_size; i++){
-            newEdge e = edge_generator->getEdge(i);
-            new_edges.push_back(e);
-        }
-
         source_count = -1;
         for (I i = 0; i < graph_size; i++) {
             if ((node_excess[i] >= 0) && (source_count == -1)) {
@@ -80,8 +72,21 @@ public:
                 throw "Node Excess array must contain first sources, then targets";
             }
         }
+
+        //init with a first nearest neighbor for all source vertices
+        edge_generator->reset();
+        new_edges.clear();
+        for (I i = 0; i < source_count; i++){
+            newEdge e = edge_generator->getEdge(i);
+            new_edges.push_back(e);
+        }
+
         mindist.resize(graph_size);
         backtrack.resize(graph_size);
+    }
+
+    Matcher() {
+        //pass variable initialization to FacilityChooser
     }
 
     //for testing purposes
@@ -92,6 +97,7 @@ public:
         backtrack.resize(graph_size);
     }
 
+    //for testing purposes
     Matcher(igraph_t* g) {
         igraph_copy(g, &graph);
         this->graph_size = igraph_vcount(g);
@@ -439,9 +445,9 @@ public:
     void calculateResult() {
         //arrange an answer
         result_weight = 0;
+        igraph_vector_t neis;
+        igraph_vector_init(&neis,0);
         for (I i = 0; i < source_count; i++) {
-            igraph_vector_t neis;
-            igraph_vector_init(&neis,0);
             igraph_neighbors(&graph, &neis, i, IGRAPH_IN);
             igraph_integer_t matched_id;
             //there can be many matched vertices because of capacities
@@ -455,8 +461,8 @@ public:
                     result_weight -= weights[eid]*edge_excess[eid];
                 }
             }
-            igraph_vector_destroy(&neis);
         }
+        igraph_vector_destroy(&neis);
     }
 
 };

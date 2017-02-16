@@ -10,6 +10,7 @@
 
 using namespace std;
 
+
 template <class V, class I>
 class fHeap {
 public:
@@ -19,12 +20,7 @@ public:
         I idx;
     } elem;
 
-    struct elemcomp {
-        bool operator () (elem left, elem right) const
-        { return left.value<right.value; }
-    };
 
-    enum sign {INC=0, DEC=1};
 
     /*returns the parent of a heap position*/
 //    inline int parent(int posel) {
@@ -36,7 +32,7 @@ public:
         return (posel-1) >> 1;
     }
 
-    fHeap(int sign=INC) {
+    fHeap(int sign=0) {
         num_elems = 0;
         this->sign=sign;
     };
@@ -339,8 +335,8 @@ public:
         //system("pause");
     };
 
-private:
-    bool compare(V a, V b) { return (sign==INC)? (a<b) : (a>b); };
+//private:
+    bool compare(V a, V b) { return (sign==0)? (a<b) : (a>b); };
 
     vector<elem> heap;
     vector<I> order;

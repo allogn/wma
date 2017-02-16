@@ -21,6 +21,7 @@ public:
     std::vector<fHeap<W,I>> dheaps; //dijsktra heaps for each source node
     std::vector<I> source_node_index; //index of customers: source_node_index[id] = vid in graph of a customer #id
     std::vector<W> weights;
+    long facility_capacity = 1;
 
     /*
      * We run <this->n> heap-based dijsktras: if a node was deheaped, the distance is guaranteed to be minimal
@@ -80,13 +81,18 @@ public:
      * edge generator generates edges for each customer, that has a particular place in a network g
      * source_node_index for each customer stores v_id of a node in g where the customer is located
      */
-    ExploringEdgeGenerator(igraph_t* g, std::vector<W> weights, std::vector<I> source_node_index) {
+    ExploringEdgeGenerator(igraph_t* g,
+                           std::vector<W>& weights,
+                           std::vector<I>& source_node_index,
+                           long facility_capacity)
+    {
         //init dijkstra heaps
         node_count_in_network = igraph_vcount(g);
         this->n = source_node_index.size();
         this->source_node_index = source_node_index;
         this->graph = g;
         this->weights = weights;
+        this->facility_capacity = facility_capacity;
         init_dijkstra();
     }
     ~ExploringEdgeGenerator() {}
@@ -98,7 +104,7 @@ public:
     //get next neighbor of a customer with ID = vid. Corresponding node in the graph = source_node_index[vid]
     newEdge getEdge(long vid) override {
         newEdge e;
-        if (isComplete(vid)) {
+        if ((vid >= this->n) || (isComplete(vid))) {
             e.exists = false;
         } else {
             e.exists = true;
@@ -107,9 +113,10 @@ public:
             dheaps[vid].dequeue(next_vid, shortest_dist);
             visited[vid][next_vid] = true;
             updateNeighbors(vid, next_vid, shortest_dist);
-            e.capacity = 1; //@todo change this outside the class - make equal to the service capacity
+            e.capacity = facility_capacity;
             e.source_node = vid;
-            e.target_node = next_vid;
+            //for target node we must return ID of a facility, i.e.
+            e.target_node = source_node_index.size() + next_vid;
             e.weight = shortest_dist; //shortest distance between
             edgeMemory.push_back(e);
         }
