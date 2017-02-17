@@ -42,10 +42,7 @@ public:
             node_excess[i] = facility_capacity;
         }
 
-        this->edge_generator = new ExploringEdgeGenerator<long,long>(network,
-                                                                     weights,
-                                                                     source_node_index,
-                                                                     facility_capacity);
+        this->edge_generator = new ExploringEdgeGenerator<long,long>(network, weights, source_node_index);
 
         //reset variables of the matching algorithm
         reset();
@@ -105,6 +102,7 @@ public:
                     return false;
                 }
                 for (auto it = matchings[only_target_id].begin(); it != matchings[only_target_id].end(); it++) {
+                    //every node in single-linked list must not be covered yet
                     covered[(*it)] = true;
                     total_covered++;
                 }
@@ -121,6 +119,7 @@ public:
     bool findSetCover() {
         //initialize single linked lists and heaps
         result.clear();
+        heap.clear();
         std::vector<std::forward_list<long>> matchings;
         // go through graph services and enheap them
         // according to the number of covered facilities = number of outgoing edges
@@ -171,6 +170,9 @@ public:
             for (long vid = 0; vid < source_count; vid++) {
                 this->increaseCapacity(vid);
             }
+        }
+        if (this->result.size() < required_facilities) {
+            //others can be placed in any free location
         }
     }
 };

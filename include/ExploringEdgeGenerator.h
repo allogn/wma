@@ -21,7 +21,6 @@ public:
     std::vector<fHeap<W,I>> dheaps; //dijsktra heaps for each source node
     std::vector<I> source_node_index; //index of customers: source_node_index[id] = vid in graph of a customer #id
     std::vector<W> weights;
-    long facility_capacity = 1;
 
     /*
      * We run <this->n> heap-based dijsktras: if a node was deheaped, the distance is guaranteed to be minimal
@@ -67,13 +66,11 @@ public:
         //n goes for number of customers
         for (I i = 0; i < n; i++) {
             fHeap<W,I> heap;
+            heap.enqueue(source_node_index[i],0); //first output edge will be a loop edge
             dheaps.push_back(heap);
 
             std::vector<bool> v(node_count_in_network, false);
             visited.push_back(v);
-
-            visited[i][source_node_index[i]] = true;
-            updateNeighbors(i, source_node_index[i], 0);
         }
     }
 
@@ -83,8 +80,7 @@ public:
      */
     ExploringEdgeGenerator(igraph_t* g,
                            std::vector<W>& weights,
-                           std::vector<I>& source_node_index,
-                           long facility_capacity)
+                           std::vector<I>& source_node_index)
     {
         //init dijkstra heaps
         node_count_in_network = igraph_vcount(g);
@@ -92,7 +88,6 @@ public:
         this->source_node_index = source_node_index;
         this->graph = g;
         this->weights = weights;
-        this->facility_capacity = facility_capacity;
         init_dijkstra();
     }
     ~ExploringEdgeGenerator() {}
@@ -113,13 +108,21 @@ public:
             dheaps[vid].dequeue(next_vid, shortest_dist);
             visited[vid][next_vid] = true;
             updateNeighbors(vid, next_vid, shortest_dist);
-            e.capacity = facility_capacity;
+            /*
+             * Capacity of each edge must NOT be equal to facility capacity, but must be equal to ONE
+             * (in a bipartite graph) that means exactly that each service can be matched with
+             * one customer only ONCE, and at the same time it can be matched with several
+             * customers according to its capacity.
+             */
+            e.capacity = 1; //THIS IS IMPORTANT(!)
             e.source_node = vid;
             //for target node we must return ID of a facility, i.e.
             e.target_node = source_node_index.size() + next_vid;
             e.weight = shortest_dist; //shortest distance between
             edgeMemory.push_back(e);
         }
+//        cout << "throw " << e.exists << " : " << e.source_node << "->" << e.target_node << endl;
+
         return e;
     }
 

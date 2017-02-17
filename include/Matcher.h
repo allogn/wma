@@ -208,9 +208,12 @@ public:
                     //update or enqueue target node
                     dheap.updateorenqueue(target_node, new_cost);
                     //maintain global heap (value for target_node was changed because of mindist
-                    newEdge nearest_edge = new_edges[target_node];
-                    W new_edge_cost = heapedCost(nearest_edge.weight, target_node);
-                    if (nearest_edge.exists) gheap.updateorenqueue(target_node, new_edge_cost);
+                    //note that target_node may not be among source nodes, but new_edges array has a size of source nodes only
+                    if (target_node < this->source_count) {
+                        newEdge nearest_edge = new_edges[target_node];
+                        W new_edge_cost = heapedCost(nearest_edge.weight, target_node);
+                        if (nearest_edge.exists) gheap.updateorenqueue(target_node, new_edge_cost);
+                    }
                 }
             }
             igraph_vector_destroy(&eids);
