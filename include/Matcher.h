@@ -69,7 +69,7 @@ public:
                 source_count = i;
             }
             if ((node_excess[i] < 0) && (source_count != -1)) {
-                throw "Node Excess array must contain first sources, then targets";
+                throw std::string("Node Excess array must contain first sources, then targets");
             }
         }
 
@@ -391,7 +391,7 @@ public:
     F matchVertex(I source_id)
     {
         if (node_excess[source_id] >= 0)
-            throw "Only nodes with negative excess can be matched";
+            throw std::string("Only nodes with negative excess can be matched");
 
         this->iteration_init(source_id);
 
@@ -406,7 +406,7 @@ public:
         I result_vid;
         if (!findAndEnlarge(&result_vid))
         {
-            throw "No valid matching in the &graph, out of additional nodes"; //no path in complete graph
+            throw std::string("No valid matching in the graph, out of additional nodes"); //no path in complete graph
         }
 
         F flowChange = augmentFlow(result_vid);

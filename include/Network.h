@@ -15,7 +15,6 @@ class Network {
 public:
     igraph_t graph;
     std::vector<long> weights;
-    long edge_capacity; //one for all
     std::vector<long> source_indexes;
     std::string annotation;
 
@@ -27,11 +26,9 @@ public:
     }
     Network(igraph_t* g,
             std::vector<long>& weights,
-            long edge_capacity,
             std::vector<long>& source_indexes) {
         igraph_copy(&this->graph, g);
         this->weights = weights;
-        this->edge_capacity = edge_capacity;
         this->source_indexes = source_indexes;
     }
     ~Network() {
@@ -43,7 +40,6 @@ public:
         outf << igraph_is_directed(&graph) << " "
              << igraph_vcount(&graph) << " "
              << igraph_ecount(&graph) << " "
-             << edge_capacity << " "
              << source_indexes.size() << "\n";
         for (long i = 0; i < igraph_ecount(&graph); i++) {
             igraph_integer_t from, to;
@@ -60,11 +56,11 @@ public:
     void load(std::string filename) {
         std::ifstream infile(filename, std::ios::in);
         if (!infile) {
-            throw "File does not exist";
+            throw std::string("Input file does not exist");
         }
         int is_directed;
         long vcount, ecount, source_num;
-        infile >> is_directed >> vcount >> ecount >> edge_capacity >> source_num;
+        infile >> is_directed >> vcount >> ecount >> source_num;
         igraph_empty(&graph, vcount, is_directed);
         weights.clear();
         for (long i = 0; i < ecount; i++) {

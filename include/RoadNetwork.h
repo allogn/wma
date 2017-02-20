@@ -6,7 +6,6 @@
 #define FCLA_ROADNETWORK_H
 
 #include <math.h>
-#include <cilk/cilk.h>
 
 #include "helpers.h"
 #include <igraph/igraph.h>
@@ -87,7 +86,7 @@ public:
     void make_weights() {
         if (!igraph_cattribute_has_attr(&graph, IGRAPH_ATTRIBUTE_VERTEX, "X") ||
                     !igraph_cattribute_has_attr(&graph, IGRAPH_ATTRIBUTE_VERTEX, "Y")) {
-            throw "Initialize Euclidean coordinates first by transform_coordinates()";
+            throw std::string("Initialize Euclidean coordinates first by transform_coordinates()");
         }
         igraph_vector_t weights;
         igraph_vector_init(&weights, igraph_ecount(&graph));

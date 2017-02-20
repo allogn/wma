@@ -140,4 +140,14 @@ void print_graph(lemon::ListDigraph* g,
     std::cout << "-----------\n\n";
 }
 
+void create_graph(igraph_t* graph, long size, std::vector<long>& edges, bool directed = false) {
+    igraph_vector_t v;
+    igraph_real_t real_edges[edges.size()];
+    for (long i = 0; i < edges.size(); i++) {
+        real_edges[i] = (double)edges[i];
+    }
+    igraph_vector_view(&v, real_edges, sizeof(real_edges)/sizeof(double));
+    igraph_create(graph, &v, size, IGRAPH_UNDIRECTED);
+}
+
 #endif //FCLA_HELPERS_H

@@ -69,62 +69,47 @@ BOOST_AUTO_TEST_CASE (basicFacilityLocation) {
     igraph_destroy(&graph);
 }
 
-/*
- * This will not work because of the method used
- */
-//BOOST_AUTO_TEST_CASE (testCliqueSingleFacility) {
-////    while (true) {
-//        long clique_size = 3;
-//        //one place should be reserved for a facility
-//        for (long customer_amount = 1; customer_amount < clique_size; customer_amount++) {
-//            igraph_t graph;
-//            igraph_full(&graph, clique_size, false, false);
-//            std::vector<long> weights(igraph_ecount(&graph));
-//            for (long i = 0; i < weights.size(); i++) {
-//                weights[i] = rand();
-//            }
-//            std::vector<long> source_node_index(customer_amount);
-//            std::vector<long> rand_ind(clique_size);
-//            for (long i = 0; i < clique_size; i++) rand_ind[i] = i;
-//            std::random_shuffle(rand_ind.begin(), rand_ind.end());
-//            for (long i = 0; i < source_node_index.size(); i++) {
-//                source_node_index[i] = rand_ind[i];
-//            }
-//
-//            FacilityChooser fcla(&graph, weights, source_node_index, 1, clique_size, 0);
-//            fcla.locateFacilities();
-////            fcla.edge_generator->save("/Users/alvis/PhD/fcla/bin/tmp.txt");
-//
-//            //find correct answer
-//            long find_min = LONG_MAX;l
-////            print_graph(&graph, weights, weights);
-//            for (long i = 0; i < clique_size; i++) {
-//                long cur_sum = 0;
-//                for (long j = 0; j < source_node_index.size(); j++) {
-//                    //network graph does not contain self-loops
-//                    //but facility can be placed at the same node as customer
-//                    //then we count the distance as zero, i.e. skip this edge
-//                    if (i == source_node_index[j]) continue;
-//                    //get weight of edge
-//                    igraph_integer_t eid;
-//                    igraph_get_eid(&graph, &eid, source_node_index[j], i, false, true);
-//                    cur_sum += weights[eid];
-//                }
-//                find_min = std::min(find_min, cur_sum);
-//            }
-//            //calculate fcla weight result
-//            long weight_result = 0;
-//            BOOST_REQUIRE_EQUAL(fcla.result.size(), 1);
-//            long fac_ind = fcla.result[0];
-//            for (long j = 0; j < source_node_index.size(); j++) {
-//                if (fac_ind == source_node_index[j]) continue;
-//                //get weight of edge
-//                igraph_integer_t eid;
-//                igraph_get_eid(&graph, &eid, source_node_index[j], fac_ind, false, true);
-//                weight_result += weights[eid];
-//            }
-//            BOOST_REQUIRE_EQUAL(weight_result, find_min);
-//            igraph_destroy(&graph);
-//        }
-////    }
-//}
+BOOST_AUTO_TEST_CASE (testDuple) {
+    igraph_t graph;
+    std::vector<long> edges = {0,1,1,2,2,3,3,4};
+    std::vector<long> weights = {1,1,1,1,1};
+    std::vector<long> sources = {0,4};
+    create_graph(&graph, 5, edges);
+    Network net(&graph, weights, sources);
+    FacilityChooser fcla(net, 1, 2);
+    fcla.locateFacilities();
+    fcla.calculateResult();
+    BOOST_CHECK_EQUAL(fcla.result.size(), 1);
+    BOOST_CHECK_EQUAL(fcla.result[0], 2);
+    igraph_destroy(&graph);
+}
+
+BOOST_AUTO_TEST_CASE (testTripple) {
+    igraph_t graph;
+    std::vector<long> edges = {0,1,2,1,3,1};
+    std::vector<long> weights = {1,2,3};
+    std::vector<long> sources = {0,2,3};
+    create_graph(&graph, 4, edges);
+    Network net(&graph, weights, sources);
+    FacilityChooser fcla(net, 1, 3);
+    fcla.locateFacilities();
+    fcla.calculateResult();
+    BOOST_CHECK_EQUAL(fcla.result.size(), 1);
+    BOOST_CHECK_EQUAL(fcla.result[0], 1);
+    igraph_destroy(&graph);
+}
+
+BOOST_AUTO_TEST_CASE (test3Tripple) {
+    igraph_t graph;
+    std::vector<long> edges = {0,1,1,2,3,4,4,2,5,6,6,2};
+    std::vector<long> weights = {1,2,3,4,5,6};
+    std::vector<long> sources = {0,3,5};
+    create_graph(&graph, 7, edges);
+    Network net(&graph, weights, sources);
+    FacilityChooser fcla(net, 2, 2);
+    fcla.locateFacilities();
+    fcla.calculateResult();
+    BOOST_CHECK_EQUAL(fcla.result.size(), 2);
+    BOOST_CHECK((fcla.result[0] == 2) || (fcla.result[1] == 2));
+    igraph_destroy(&graph);
+}

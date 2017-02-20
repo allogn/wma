@@ -74,6 +74,10 @@ public:
         }
     }
 
+    ExploringEdgeGenerator(Network& network) {
+        this->ExploringEdgeGenerator(&network.graph, network.weights, network.source_indexes);
+    }
+
     /*
      * edge generator generates edges for each customer, that has a particular place in a network g
      * source_node_index for each customer stores v_id of a node in g where the customer is located
@@ -117,11 +121,10 @@ public:
             e.capacity = 1; //THIS IS IMPORTANT(!)
             e.source_node = vid;
             //for target node we must return ID of a facility, i.e.
-            e.target_node = source_node_index.size() + next_vid;
+            e.target_node = this->n + next_vid;
             e.weight = shortest_dist; //shortest distance between
             edgeMemory.push_back(e);
         }
-//        cout << "throw " << e.exists << " : " << e.source_node << "->" << e.target_node << endl;
 
         return e;
     }

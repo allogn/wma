@@ -68,7 +68,7 @@ int main(int argc, const char** argv) {
     std::vector<long> source_indexes(sources);
     for (long i = 0; i < sources; i++) source_indexes[i] = all_nodes[i];
 
-    Network network(&graph, weights, 1, source_indexes);
+    Network network(&graph, weights, source_indexes);
     network.save(outf);
     cout << "Done." << endl;
 }

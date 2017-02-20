@@ -97,11 +97,11 @@ public:
         edgeMemory.clear();
         std::ifstream f(filename);
         if (!f.is_open())
-            throw "File does not exist";
+            throw std::string("File does not exist");
         std::string line;
         while ( getline (f,line) ) {
             if (line == "")
-                throw "Empty file with Edges";
+                throw std::string("Empty file with Edges");
             std::vector<long> vect;
             std::stringstream ss(line);
             long i;

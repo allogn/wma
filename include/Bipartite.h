@@ -57,7 +57,7 @@ public:
 
         //check whether graph is weighted
         if (!igraph_cattribute_has_attr(&bigraph, IGRAPH_ATTRIBUTE_EDGE, "weight")) {
-            throw "Weights of bipartite graph must be initialized before matching";
+            throw std::string("Weights of bipartite graph must be initialized before matching");
         }
         igraph_vector_t weights;
         igraph_vector_init(&weights,0);
