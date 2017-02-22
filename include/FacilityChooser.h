@@ -217,8 +217,13 @@ public:
         if (this->result.size() < required_facilities) {
             //find the total number of available facilities
             long facilities_left = required_facilities - this->result.size();
+            if (this->source_count <= facilities_left) {
+                throw std::string("Trivial solution: Too many facilities");
+            }
             //get worst <facilities_left> covered customers by existing result
-            fHeap<long, long> topHeap; //min heap (top is the smallest)
+            //go throught all customers and for each find the smallest (best) option
+            //then choose top-<facilities_left> options
+            std::vector<long> source_best(this->source_count, LONG_MAX);
             for (long i = 0; i < this->result.size(); i++) {
                 //each element in result array is a facility location
                 //bipartite graph still holds customers that were matched to that location
@@ -232,33 +237,28 @@ public:
                 for (igraph_integer_t i = 0; i < igraph_vector_size(&eids); i++) {
                     igraph_integer_t eid = VECTOR(eids)[i];
                     if (edge_excess[eid] == 0) continue; //no matching
-                    igraph_integer_t target_node, source_node;
+                    igraph_integer_t target_node, source_node; //target node is a left(source) node in bipartite graph
                     igraph_edge(&graph,eid,&source_node,&target_node);
                     //target node now is vid of a customer and |weights of edge| is the distance
                     long cur_dist = -this->weights[eid]; //minus because the edge is inverted
-                    if ((topHeap.size() < facilities_left) || (topHeap.getTopValue() < cur_dist)) {
-                        //enqueue or update: we are looking for the top biggest (note that heap in min-heap still)
-                        //so we update only if the value in the heap is smaller
-                        long heaped_val;
-                        if (topHeap.isExisted(target_node, heaped_val)) {
-                            if (heaped_val < cur_dist) {
-                                topHeap.updatequeue(target_node, cur_dist);
-                            }
-                        } else {
-                            //remove the smallest element and enqueue the new one
-                            topHeap.dequeue();
-                            topHeap.enqueue(target_node, cur_dist);
-                        }
-                    }
+                    source_best[target_node] = std::min(source_best[target_node], cur_dist)
                 }
                 igraph_vector_destroy(&eids);
             }
-            //now topHeap contains the best customers
-            if (topHeap.size() < facilities_left) {
-                throw std::string("Trivial solution: Too many facilities");
+            //now get top-k and add to the result
+            fHeap<long,long> partialHeapsort;
+            for (long i = 0; i < this->source_count; i++) {
+                if (partialHeapsort.size() < facilities_left) {
+                    partialHeapsort.enqueue(i, source_best[i]);
+                } else {
+                    if (partialHeapsort.getTopVal() < source_best[i])) { //we want to get top worst, i.e. top biggest
+                        partialHeapsort.dequeue();
+                        partialHeapsort.enqueue(i, source_best[i]);
+                    }
+                }
             }
             long new_location;
-            while (topHeap.dequeue(new_location)) {
+            while (partialHeapsort.dequeue(new_location)) {
                 this->result.push_back(new_location-this->source_count); //put location in a network
             }
         }
