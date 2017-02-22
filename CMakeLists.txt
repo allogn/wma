@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.7)
 project(fcla)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ligraph -lboost_program_options -losmpbf")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ligraph -lboost_program_options")
 
 include_directories(${CMAKE_SOURCE_DIR}/include/)
 
