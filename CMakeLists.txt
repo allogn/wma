@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.7)
 project(fcla)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ligraph -lboost_program_options")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ligraph -lboost_program_options -losmpbf")
 
 include_directories(${CMAKE_SOURCE_DIR}/include/)
 
@@ -16,10 +16,7 @@ include_directories(${Boost_INCLUDE_DIR})
 #find_package (Boost COMPONENTS REQUIRED chrono filesystem)
 
 # include pbf reader
-include_directories(${CMAKE_SOURCE_DIR}/lib/OSM-binary/build/include)
 include_directories(${CMAKE_SOURCE_DIR}/lib/libosmpbfreader/)
-include_directories(${CMAKE_SOURCE_DIR}/lib/lemon-1.3.1/lib/include)
-set(OSMPBF_LINK_LIBS ${CMAKE_SOURCE_DIR}/lib/OSM-binary/build/lib/libosmpbf.so)
 
 find_package(ZLIB REQUIRED)
 if (ZLIB_FOUND)
@@ -36,21 +33,20 @@ file(GLOB TEST_SOURCE_FILES tests/*.cpp)
 file(GLOB SIA_TEST_SOURCE_FILES tests/*.cpp)
 
 add_executable(fcla main.cpp ${SOURCE_FILES};)
-target_link_libraries(fcla ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};)
-#${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY}
+target_link_libraries(fcla ${Boost_LIBRARIES};)
 add_executable(generator generator.cpp ${SOURCE_FILES};)
 target_link_libraries(generator ${Boost_LIBRARIES};)
 
 add_executable(brutesolver brutesolver.cpp)
-target_link_libraries(brutesolver ${Boost_LIBRARIES};${LEMON_LINK_LIBS})
+target_link_libraries(brutesolver ${Boost_LIBRARIES};)
 
 add_executable(SIA_tests tests/SIA_tests.cpp)
-target_link_libraries(SIA_tests ${Boost_LIBRARIES};)#${LEMON_LINK_LIBS})
+target_link_libraries(SIA_tests ${Boost_LIBRARIES};)
 
 add_executable(fcla_tests tests/fcla_tests.cpp)
 target_link_libraries(fcla_tests ${Boost_LIBRARIES};)
 
 add_executable(simple_tests tests/simple_tests.cpp)
-target_link_libraries(simple_tests ${Boost_LIBRARIES};${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
+target_link_libraries(simple_tests ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
