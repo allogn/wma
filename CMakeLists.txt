@@ -26,6 +26,7 @@ endif()
 find_package(Protobuf REQUIRED)
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
+set(IGRAPH_LIBS /usr/local/lib/libigraph.a)
 
 # setting executables
 file(GLOB SOURCE_FILES src/*.cpp)
@@ -33,12 +34,12 @@ file(GLOB TEST_SOURCE_FILES tests/*.cpp)
 file(GLOB SIA_TEST_SOURCE_FILES tests/*.cpp)
 
 add_executable(fcla main.cpp ${SOURCE_FILES};)
-target_link_libraries(fcla ${Boost_LIBRARIES};)
+target_link_libraries(fcla ${Boost_LIBRARIES};${IGRAPH_LIBS})
 add_executable(generator generator.cpp ${SOURCE_FILES};)
-target_link_libraries(generator ${Boost_LIBRARIES};)
+target_link_libraries(generator ${Boost_LIBRARIES};${IGRAPH_LIBS})
 
 add_executable(brutesolver brutesolver.cpp)
-target_link_libraries(brutesolver ${Boost_LIBRARIES};)
+target_link_libraries(brutesolver ${Boost_LIBRARIES};${IGRAPH_LIBS})
 
 add_executable(SIA_tests tests/SIA_tests.cpp)
 target_link_libraries(SIA_tests ${Boost_LIBRARIES};)
