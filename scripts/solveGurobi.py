@@ -2,7 +2,7 @@ from gurobipy import *
 from Network import *
 import sys
 
-if len(sys.argv) != 3:
+if len(sys.argv) != 4:
     print("<path, capacity, number of facilities> arguments required.")
     exit()
 
@@ -10,8 +10,8 @@ if len(sys.argv) != 3:
 
 # Load graph from FCLA internal format to NetworkX format
 network = Network(sys.argv[1])
-facility_capacity = sys.argv[2]
-number_of_facilities = sys.argv[3]
+facility_capacity = int(sys.argv[2])
+number_of_facilities = int(sys.argv[3])
 
 # Problem data
 clients = network.sources
@@ -63,9 +63,15 @@ for j in range(numFacilities):
 
 # state the exact amount of facilities to be placed
 for j in range(numFacilities):
-    m.addConstr(quicksum(x[j] for j in range(numClients)) == number_of_facilities)
+    m.addConstr(quicksum(x[j] for j in range(numFacilities)) == number_of_facilities)
 
 m.setObjective(quicksum(quicksum(d[(i, j)]*y[(i, j)]
                for i in range(numClients)) for j in range(numFacilities)))
 
+m.setParam('OutputFlag', False)
+m.setParam('LogFile', '../temp/gurobi.log')
 m.optimize()
+if m.status == GRB.Status.OPTIMAL:
+    print(int(m.objVal))
+else:
+    print("Solution not found")

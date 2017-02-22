@@ -255,8 +255,7 @@ public:
             }
             //now topHeap contains the best customers
             if (topHeap.size() < facilities_left) {
-                throw std::string("The problem is trivial, too many facilities: "
-                        "place one facility near each customer, and some facilities are still left");
+                throw std::string("Trivial solution: Too many facilities");
             }
             long new_location;
             while (topHeap.dequeue(new_location)) {

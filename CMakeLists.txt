@@ -15,13 +15,6 @@ include_directories(${Boost_INCLUDE_DIR})
 #set (Boost_USE_MULTITHREAD ON)  # enable multithreading
 #find_package (Boost COMPONENTS REQUIRED chrono filesystem)
 
-# include igraph
-#set(IGRAPH_BUILD_PATH ${CMAKE_SOURCE_DIR}/lib/igraph-0.7.1/build/)
-#set(IGRAPH_LINK_LIBS ${IGRAPH_BUILD_PATH}/lib/libigraph.so)
-#include_directories(${IGRAPH_BUILD_PATH}/include/)
-#include_directories()
-#set(IGRAPH_INCLUDE_DIR)
-
 # include pbf reader
 include_directories(${CMAKE_SOURCE_DIR}/lib/OSM-binary/build/include)
 include_directories(${CMAKE_SOURCE_DIR}/lib/libosmpbfreader/)
@@ -48,16 +41,16 @@ target_link_libraries(fcla ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};)
 add_executable(generator generator.cpp ${SOURCE_FILES};)
 target_link_libraries(generator ${Boost_LIBRARIES};)
 
-add_executable(simple_tests tests/simple_tests.cpp)
-target_link_libraries(simple_tests ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
-
 add_executable(brutesolver brutesolver.cpp)
-target_link_libraries(brutesolver ${Boost_LIBRARIES};${IGRAPH_LINK_LIBS};${LEMON_LINK_LIBS})
+target_link_libraries(brutesolver ${Boost_LIBRARIES};${LEMON_LINK_LIBS})
 
 add_executable(SIA_tests tests/SIA_tests.cpp)
-target_link_libraries(SIA_tests ${Boost_LIBRARIES};)#${IGRAPH_LINK_LIBS};${LEMON_LINK_LIBS})
+target_link_libraries(SIA_tests ${Boost_LIBRARIES};)#${LEMON_LINK_LIBS})
 
 add_executable(fcla_tests tests/fcla_tests.cpp)
 target_link_libraries(fcla_tests ${Boost_LIBRARIES};)
+
+add_executable(simple_tests tests/simple_tests.cpp)
+target_link_libraries(simple_tests ${Boost_LIBRARIES};${OSMPBF_LINK_LIBS};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

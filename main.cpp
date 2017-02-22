@@ -44,7 +44,11 @@ int main(int argc, const char** argv) {
         }
         cout << fcla.totalCost << endl;
     } catch (string e) {
-        cout << e << endl;
+        if (e == "Trivial solution: Too many facilities") {
+            cout << 0 << endl;
+        } else {
+            cout << e << endl;
+        }
     };
 
     return 0;
