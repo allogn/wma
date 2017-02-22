@@ -27,6 +27,7 @@ find_package(Protobuf REQUIRED)
 include_directories(${PROTOBUF_INCLUDE_DIR})
 
 set(IGRAPH_LIBS /usr/local/lib/libigraph.a)
+include_directories(/usr/local/include/igraph/)
 
 # setting executables
 file(GLOB SOURCE_FILES src/*.cpp)

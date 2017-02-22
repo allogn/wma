@@ -32,8 +32,6 @@ inline long intWeightFromCoords(double x1, double y1, double x2, double y2) {
     return intWeight(sqrt(pow(x2-x1, 2) + pow(y2-y1, 2)));
 }
 
-
-//@todo not tested, used at least in SIA tests
 //input: uninitialized graph, pointer to uninitialized weights, size of the graph
 int generate_random_geometric_graph(long size,
                                     double density, //from 0 to 1
