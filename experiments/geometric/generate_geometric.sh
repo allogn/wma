@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-for SIZE in {10..200..50};
+for SIZE in {10..40..10};
 do
     for ((SOURCE_NUM = 1; SOURCE_NUM <= $SIZE; SOURCE_NUM+=10));
     do

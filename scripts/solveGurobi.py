@@ -2,13 +2,18 @@ from gurobipy import *
 from Network import *
 import sys
 import re
+import json
 
 # Gurobi docs : http://examples.gurobi.com/facility-location/
 
 def run(network_file,facility_capacity,number_of_facilities):
     network = Network(network_file)
-    experiment_id = re.match('.*/([0-9]+).gr',network_file).groups(1)[0]
-    footprint = str(experiment_id) + " " + str(number_of_facilities) + " " + str(facility_capacity)
+    experiment_id = network.id
+    experiment_info = {}
+    experiment_info['id'] = experiment_id
+    experiment_info['number of facilities'] = number_of_facilities
+    experiment_info['facility_capacity'] = facility_capacity
+
     # Problem data
     clients = network.sources
     facilities = range(network.G.number_of_nodes())
@@ -17,12 +22,12 @@ def run(network_file,facility_capacity,number_of_facilities):
     numClients = len(clients)
 
     if number_of_facilities * facility_capacity < numClients:
-        print(footprint + " -1 0")
-        return
+        experiment_info['error'] = 'not enough facilities'
+        return experiment_info
 
     if not nx.is_connected(network.G):
-        print(footprint + " -1 0")
-        return
+        experiment_info['error'] = 'graph is not connected'
+        return experiment_info
 
     m = Model()
     m.setParam('OutputFlag', False)
@@ -69,18 +74,21 @@ def run(network_file,facility_capacity,number_of_facilities):
     m.optimize()
 
     if m.status == GRB.Status.OPTIMAL:
-        print(footprint + " " + str(int(m.objVal)) + " " + str(m.runtime))
+        experiment_info['objective'] = int(m.objVal)
+        experiment_info['runtime'] = m.runtime
     else:
-        print(experiment_id + " Error")
+        experiment_info['error'] = 'problem infeasible'
 
+    return experiment_info
 
 if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print("|path, capacity, number of facilities| arguments required.")
+    if len(sys.argv) < 5:
+        print("|path, capacity, number of facilities, output_file| arguments required.")
         exit()
     # Load graph from FCLA internal format to NetworkX format
-
     network_file = sys.argv[1]
     facility_capacity = int(sys.argv[2])
     number_of_facilities = int(sys.argv[3])
-    run(network_file, facility_capacity, number_of_facilities)
+    result = run(network_file, facility_capacity, number_of_facilities)
+    outfile = open(sys.argv[4], 'w')
+    json.dump(result, outfile)

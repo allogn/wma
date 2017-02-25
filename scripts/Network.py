@@ -16,7 +16,7 @@ class Network:
             print("Network file does not exist")
             return
         params = file.readline().split()
-        # directed = bool(params[0])
+        self.id = params[0]
         vcount = int(params[1])
         ecount = int(params[2])
         num_sources = int(params[3])

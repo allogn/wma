@@ -25,7 +25,7 @@ int main(int argc, const char** argv) {
 
     // parsing parameters
     int graph_type;
-    string outdir;
+    std::string outdir;
     long n;
     long sources;
     double geom_dens;
@@ -47,14 +47,6 @@ int main(int argc, const char** argv) {
     }
     po::notify(vm);
 
-    //generate output file name (unique = experiment id)
-    struct timespec spec;
-    clock_gettime(CLOCK_REALTIME, &spec);
-    string strtime = std::to_string(spec.tv_sec) + std::to_string(spec.tv_nsec);
-    strtime = strtime.substr(0, strtime.find('.'));
-    string filename = outdir + "/" + strtime + ".gr";
-
-
     igraph_t graph;
     vector<long> weights;
     switch (graph_type) {
@@ -73,12 +65,12 @@ int main(int argc, const char** argv) {
     }
 
     //choose source_indexes randomly
-    vector<long> all_nodes(n);
+    std::vector<long> all_nodes(n);
     for (long i = 0; i < n; i++) all_nodes[i] = i;
     std::random_shuffle(all_nodes.begin(),all_nodes.end());
     std::vector<long> source_indexes(sources);
     for (long i = 0; i < sources; i++) source_indexes[i] = all_nodes[i];
 
     Network network(&graph, weights, source_indexes);
-    network.save(filename);
+    network.save(outdir);
 }

@@ -10,13 +10,14 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <time.h>
 
 class Network {
 public:
     igraph_t graph;
+    std::string id;
     std::vector<long> weights;
     std::vector<long> source_indexes;
-    std::string annotation;
 
     Network(std::string filename) {
         this->load(filename);
@@ -30,14 +31,22 @@ public:
         igraph_copy(&this->graph, g);
         this->weights = weights;
         this->source_indexes = source_indexes;
+
+        //generate unique id
+        struct timespec spec;
+        clock_gettime(CLOCK_REALTIME, &spec);
+        srand (spec.tv_nsec);
+        std::string strtime = std::to_string(spec.tv_sec) + std::to_string(spec.tv_nsec);
+        this->id = strtime.substr(0, strtime.size()-3) + std::to_string(rand() % 1000);
     }
     ~Network() {
         igraph_destroy(&this->graph);
     }
 
-    void save(std::string filename) {
+    void save(std::string dir) {
+        std::string filename = dir + '/' + this->id + ".ntw";
         std::ofstream outf(filename,std::ios::app);
-        outf << igraph_is_directed(&graph) << " "
+        outf << this->id << " "
              << igraph_vcount(&graph) << " "
              << igraph_ecount(&graph) << " "
              << source_indexes.size() << "\n";
@@ -49,7 +58,6 @@ public:
         for (long i = 0; i < source_indexes.size(); i++) {
             outf << source_indexes[i] << "\n";
         }
-        outf << annotation;
         outf.close();
     }
 
@@ -58,10 +66,9 @@ public:
         if (!infile) {
             throw std::string("Input file does not exist");
         }
-        int is_directed;
         long vcount, ecount, source_num;
-        infile >> is_directed >> vcount >> ecount >> source_num;
-        igraph_empty(&graph, vcount, is_directed);
+        infile >> this->id >> vcount >> ecount >> source_num;
+        igraph_empty(&graph, vcount, false);
         weights.clear();
         for (long i = 0; i < ecount; i++) {
             long from, to, weight, capacity;
@@ -74,12 +81,6 @@ public:
             long source_id;
             infile >> source_id;
             source_indexes.push_back(source_id);
-        }
-        annotation = "";
-        while(!infile.eof()) {
-            std::string additional_info;
-            infile >> additional_info;
-            annotation = annotation + " " + additional_info;
         }
     }
 };

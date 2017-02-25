@@ -10,6 +10,7 @@
 #include <igraph/igraph.h>
 #include <lemon/list_graph.h>
 #include <lemon/cost_scaling.h>
+#include <chrono>
 
 #include "helpers.h"
 #include "Network.h"
@@ -118,12 +119,14 @@ int main(int argc, const char** argv) {
     for (long i = 0 ; i < network.weights.size(); i++)
         VECTOR(real_weights)[i] = network.weights[i];
 
+    auto start = std::chrono::high_resolution_clock::now();
     igraph_vs_t all_nodes;
     igraph_vs_all(&all_nodes);
     igraph_matrix_t res_matx;
     igraph_matrix_init(&res_matx, 0, 0);
     igraph_shortest_paths_bellman_ford(&network.graph, &res_matx, all_nodes, all_nodes, &real_weights, IGRAPH_ALL);
     igraph_vector_destroy(&real_weights);
+    auto finish = std::chrono::high_resolution_clock::now();
 
     //for each set of facilities - calculate matching (objective function)
     long best_objective = LONG_MAX;
@@ -137,6 +140,8 @@ int main(int argc, const char** argv) {
                                                                       facility_index, facility_capacity));
     } while (next_facility_indexes(facility_index, max_index, facilities_to_locate-1));
 
-    cout << best_objective << endl;
+    cout << filename.substr(filename.rfind('/')+1, filename.rfind('.')) << " "
+         << facilities_to_locate << " " << facility_capacity << " "
+         << best_objective << " " << std::chrono::duration_cast<std::chrono::seconds>(finish-start).count() << endl;
 
 }
