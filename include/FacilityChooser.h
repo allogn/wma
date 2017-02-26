@@ -3,6 +3,7 @@
 
 #include <forward_list>
 #include <fstream>
+#include <chrono>
 #include "nheap.h"
 #include "ExploringEdgeGenerator.h"
 #include "Matcher.h"
