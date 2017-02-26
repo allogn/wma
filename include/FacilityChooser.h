@@ -234,6 +234,10 @@ public:
                 for (long i = 0; i < facilities_left - this->source_count; i++) {
                     this->result.push_back(this->source_indexes[0]);
                 }
+
+                auto finish_time = std::chrono::high_resolution_clock::now();
+                this->runtime = std::chrono::duration_cast<std::chrono::seconds>(finish_time-start_time).count();
+                return;
             }
             //get worst <facilities_left> covered customers by existing result
             //go throught all customers and for each find the smallest (best) option
@@ -278,7 +282,7 @@ public:
             }
         }
         auto finish_time = std::chrono::high_resolution_clock::now();
-        this->runtime = std::chrono::duration_cast<std::chrono::seconds>(finish_time-start_time).count();
+        this->runtime = std::chrono::duration<double, std::deci>(finish_time-start_time).count()/10.;
     }
 
     long calculateResult() {
@@ -315,7 +319,7 @@ public:
         outf << "\"capacity of facilities\":" << this->facility_capacity << ",";
         outf << "\"objective\":" << totalCost << ",";
         outf << "\"lambda\":" << this->lambda << ",";
-        outf << "\"runtime\":" << this->runtime << ",";
+        outf << "\"runtime\":" << this->runtime;
         outf << "}";
         outf.close();
     }

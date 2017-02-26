@@ -30,12 +30,12 @@ for f in os.listdir(path.join(data_path,'geometric')):
     capacity = 2
     facilities = sources/2+2
 
-    p = subprocess.Popen([path.join(root_path,'bin','brutesolver'),'-i',
+    p = subprocess.Popen([path.join(root_path,'bin','fcla'),'-i',
                           full_target_path, '-c', str(capacity), '-n', str(facilities),
                           '-o', path.join(data_path,'solutions','geometric','fcla',id + ".json")],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     p.wait()
     out, err = p.communicate()
-    if len(out) + len(err) > 0:
+    if len(err) > 0:
         print(out, err)

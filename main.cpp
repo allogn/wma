@@ -40,13 +40,13 @@ int main(int argc, const char** argv) {
         fcla.locateFacilities();
         fcla.calculateResult();
         fcla.saveResult(out_filename);
+        cout << fcla.totalCost << " " << fcla.runtime << endl;
     } catch (string e) {
         if (e == "Trivial solution: Too many facilities") {
             cout << 0 << endl;
         } else {
             cout << e << endl;
         }
-    };
-
+    }
     return 0;
 }
