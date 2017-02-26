@@ -32,7 +32,7 @@ for f in os.listdir(path.join(data_path,'geometric')):
 
     p = subprocess.Popen([path.join(root_path,'bin','brutesolver'),'-i',
                           full_target_path, '-c', str(capacity), '-n', str(facilities),
-                          '-o', path.join(data_path,'solutions','geometric','brute',id + ".json")],
+                          '-o', path.join(data_path,'solutions','geometric','fcla',id + ".json")],
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     p.wait()

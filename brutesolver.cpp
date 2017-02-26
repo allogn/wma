@@ -11,6 +11,7 @@
 #include <lemon/list_graph.h>
 #include <lemon/cost_scaling.h>
 #include <chrono>
+#include <fstream>
 
 #include "helpers.h"
 #include "Network.h"
@@ -93,6 +94,7 @@ bool next_facility_indexes(std::vector<long>& facility_index, long max_index, lo
 
 int main(int argc, const char** argv) {
     string filename;
+    string outfilename;
     long facilities_to_locate;
     long facility_capacity;
 
@@ -100,6 +102,7 @@ int main(int argc, const char** argv) {
     desc.add_options()
             ("help,h", "produce help message")
             ("input,i", po::value<string>(&filename)->required(), "Input file, a network")
+            ("ouput,o", po::value<string>(&outfilename)->required(), "Output file, json")
             ("facilities,n", po::value<long>(&facilities_to_locate)->required(), "Facilities to locate")
             ("faccap,c", po::value<long>(&facility_capacity)->default_value(1), "Capacity of facilities");
 
@@ -140,8 +143,13 @@ int main(int argc, const char** argv) {
                                                                       facility_index, facility_capacity));
     } while (next_facility_indexes(facility_index, max_index, facilities_to_locate-1));
 
-    cout << filename.substr(filename.rfind('/')+1, filename.rfind('.')) << " "
-         << facilities_to_locate << " " << facility_capacity << " "
-         << best_objective << " " << std::chrono::duration_cast<std::chrono::seconds>(finish-start).count() << endl;
-
+    ofstream outf(outfilename, ios::out);
+    outf << "{";
+    outf << "\"id\": \"" << network.id << "\",";
+    outf << "\"number of facilities\": " << facilities_to_locate << ",";
+    outf << "\"capacity of facilities\":" << facility_capacity << ",";
+    outf << "\"objective\":" << best_objective << ",";
+    outf << "\"runtime\":" << std::chrono::duration_cast<std::chrono::seconds>(finish-start).count();
+    outf << "}";
+    outf.close();
 }

@@ -14,6 +14,10 @@ public:
     std::vector<long> result;
     long totalCost;
     long required_facilities;
+    double runtime;
+    std::string exp_id;
+    long facility_capacity;
+    std::vector<long> source_indexes;
     /*
      * lambda is a parameter that states when to terminate the heap exploration
      * it is equal to a minimal service filling required for considering that service
@@ -29,6 +33,8 @@ public:
                     long facilities_to_locate,
                     long facility_capacity,
                     long lambda = 0) {
+        this->exp_id = network.id;
+        this->source_indexes = network.source_indexes;
         igraph_bool_t check_connected;
         igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
         if (!check_connected) {
@@ -77,6 +83,7 @@ public:
         graph_size = source_node_index.size() + igraph_vcount(network);
         igraph_empty(&graph, graph_size, true); //create directed graph
         this->node_excess.resize(graph_size,-1);
+        this->facility_capacity = facility_capacity;
         for (long i = source_node_index.size(); i < graph_size; i++) {
             node_excess[i] = facility_capacity;
         }
@@ -201,6 +208,8 @@ public:
     }
 
     void locateFacilities() {
+
+        auto start_time = std::chrono::high_resolution_clock::now();
         this->run(); //calculate preliminary matching
 
         // increase customer capacities until we can choose a covering subset of matched services
@@ -218,7 +227,13 @@ public:
             //find the total number of available facilities
             long facilities_left = required_facilities - this->result.size();
             if (this->source_count <= facilities_left) {
-                throw std::string("Trivial solution: Too many facilities");
+                //trivial solution - objective, objective = 0, place facilities in customer locations
+                for (long i = 0; i < this->source_count; i++) {
+                    this->result.push_back(this->source_indexes[i]);
+                }
+                for (long i = 0; i < facilities_left - this->source_count; i++) {
+                    this->result.push_back(this->source_indexes[0]);
+                }
             }
             //get worst <facilities_left> covered customers by existing result
             //go throught all customers and for each find the smallest (best) option
@@ -241,7 +256,7 @@ public:
                     igraph_edge(&graph,eid,&source_node,&target_node);
                     //target node now is vid of a customer and |weights of edge| is the distance
                     long cur_dist = -this->weights[eid]; //minus because the edge is inverted
-                    source_best[target_node] = std::min(source_best[target_node], cur_dist)
+                    source_best[target_node] = std::min(source_best[target_node], cur_dist);
                 }
                 igraph_vector_destroy(&eids);
             }
@@ -251,7 +266,7 @@ public:
                 if (partialHeapsort.size() < facilities_left) {
                     partialHeapsort.enqueue(i, source_best[i]);
                 } else {
-                    if (partialHeapsort.getTopVal() < source_best[i])) { //we want to get top worst, i.e. top biggest
+                    if (partialHeapsort.getTopValue() < source_best[i]) { //we want to get top worst, i.e. top biggest
                         partialHeapsort.dequeue();
                         partialHeapsort.enqueue(i, source_best[i]);
                     }
@@ -262,6 +277,8 @@ public:
                 this->result.push_back(new_location-this->source_count); //put location in a network
             }
         }
+        auto finish_time = std::chrono::high_resolution_clock::now();
+        this->runtime = std::chrono::duration_cast<std::chrono::seconds>(finish_time-start_time).count();
     }
 
     long calculateResult() {
@@ -291,12 +308,16 @@ public:
     }
 
     void saveResult(std::string filename) {
-        std::ofstream f(filename, std::ios::out);
-        f << totalCost << "\n";
-        for (long i = 0; i < this->result.size(); i++) {
-            f << this->result[i] << "\n";
-        }
-        f.close();
+        std::ofstream outf(filename, std::ios::out);
+        outf << "{";
+        outf << "\"id\": \"" << this->exp_id << "\",";
+        outf << "\"number of facilities\": " << this->required_facilities << ",";
+        outf << "\"capacity of facilities\":" << this->facility_capacity << ",";
+        outf << "\"objective\":" << totalCost << ",";
+        outf << "\"lambda\":" << this->lambda << ",";
+        outf << "\"runtime\":" << this->runtime << ",";
+        outf << "}";
+        outf.close();
     }
 };
 

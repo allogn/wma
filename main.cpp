@@ -24,7 +24,7 @@ int main(int argc, const char** argv) {
             ("facilities,n", po::value<long>(&facilities_to_locate)->required(), "Facilities to locate")
             ("faccap,c", po::value<long>(&facility_capacity)->default_value(1), "Capacity of facilities")
             ("lambda,l", po::value<long>(&lambda)->default_value(0), "Parameter lambda, top-k facility heap threshold")
-            ("output,o", po::value<string>(&out_filename)->default_value(""), "Output file");
+            ("output,o", po::value<string>(&out_filename)->required(), "Output file");
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -39,10 +39,7 @@ int main(int argc, const char** argv) {
         FacilityChooser fcla(net, facilities_to_locate, facility_capacity, lambda);
         fcla.locateFacilities();
         fcla.calculateResult();
-        if (out_filename != "") {
-            fcla.saveResult(out_filename);
-        }
-        cout << fcla.totalCost << endl;
+        fcla.saveResult(out_filename);
     } catch (string e) {
         if (e == "Trivial solution: Too many facilities") {
             cout << 0 << endl;
