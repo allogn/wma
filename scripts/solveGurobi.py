@@ -12,7 +12,7 @@ def run(network_file,facility_capacity,number_of_facilities):
     experiment_info = {}
     experiment_info['id'] = experiment_id
     experiment_info['number of facilities'] = number_of_facilities
-    experiment_info['capacity of facilities'] = facility_capacity
+    experiment_info['facility_capacity'] = facility_capacity
 
     # Problem data
     clients = network.sources

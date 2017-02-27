@@ -26,16 +26,19 @@ for f in os.listdir(path.join(data_path,'geometric','100-300:sources30')):
         edges = int(params[2])
         vertices = int(params[1])
         sources = int(params[3])
+    if (sources < 300):
+        continue
+    capacity = 5
+    for facilities in range(6,30):
 
-    capacity = 2
-    facilities = sources/2+2
-
-    p = subprocess.Popen([path.join(root_path,'bin','fcla'),'-i',
-                          full_target_path, '-c', str(capacity), '-n', str(facilities),
-                          '-o', path.join(data_path,'solutions','geometric','100-300:sources30','fcla',id + ".json")],
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    p.wait()
-    out, err = p.communicate()
-    if len(err) > 0:
-        print(out, err)
+        p = subprocess.Popen(['python', path.join(root_path,'scripts','solveGurobi.py'),
+                          full_target_path,
+                          str(capacity),
+                          str(facilities),
+                          path.join(data_path,'solutions','geometric','300:sources30:varfac','gurobi',id + ".json")],
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE)
+        p.wait()
+        out, err = p.communicate()
+        if len(out) + len(err) > 0:
+            print(out, err)
