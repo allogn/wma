@@ -1,0 +1,1 @@
+{"id": "1488182992632885823","number of facilities": 28,"capacity of facilities":7534184,"objective":3440,"lambda":0,"runtime":0.088957}
