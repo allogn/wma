@@ -17,6 +17,7 @@ public:
     long required_facilities;
     double runtime;
     std::string exp_id;
+    std::string error_message;
     long facility_capacity;
     std::vector<long> source_indexes;
     /*
@@ -33,18 +34,23 @@ public:
     FacilityChooser(Network& network,
                     long facilities_to_locate,
                     long facility_capacity,
-                    long lambda = 0) {
+                    long lambda = 0,
+                    int check_connectivity = 1) {
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
-        igraph_bool_t check_connected;
-        igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
-        if (!check_connected) {
-            //this is important because if one location should be placed - there should be a possibility of
-            //checking the distance from each customer (creation of an edge in bipartite graph)
-            throw std::string("Network must be weakly connected");
-        }
-        if (facilities_to_locate*facility_capacity < network.source_indexes.size()) {
-            throw std::string("Problem infeasible: not enough facilities");
+        this->error_message = "";
+
+        if (check_connectivity == 1) {
+            igraph_bool_t check_connected;
+            igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
+            if (!check_connected) {
+                //this is important because if one location should be placed - there should be a possibility of
+                //checking the distance from each customer (creation of an edge in bipartite graph)
+                throw std::string("Network must be weakly connected");
+            }
+            if (facilities_to_locate*facility_capacity < network.source_indexes.size()) {
+                throw std::string("Problem infeasible: not enough facilities");
+            }
         }
 
         heap.sign = 1; //make heap decreasing
@@ -310,19 +316,6 @@ public:
             totalCost += closest_dist;
         }
         return totalCost;
-    }
-
-    void saveResult(std::string filename) {
-        std::ofstream outf(filename, std::ios::out);
-        outf << "{";
-        outf << "\"id\": \"" << this->exp_id << "\",";
-        outf << "\"number of facilities\": " << this->required_facilities << ",";
-        outf << "\"capacity of facilities\":" << this->facility_capacity << ",";
-        outf << "\"objective\":" << totalCost << ",";
-        outf << "\"lambda\":" << this->lambda << ",";
-        outf << "\"runtime\":" << this->runtime;
-        outf << "}";
-        outf.close();
     }
 };
 

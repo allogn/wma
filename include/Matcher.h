@@ -406,7 +406,12 @@ public:
         I result_vid;
         if (!findAndEnlarge(&result_vid))
         {
-            throw std::string("No valid matching in the graph, out of additional nodes"); //no path in complete graph
+            /*
+             * this situation can happen if capacities of all sources are increased by one, but there are less than
+             * <sources> potential facility locations left. So, we have explored literally all the graph. do we?
+             */
+            return 0; //no matching in the graph
+//            throw std::string("No valid matching in the graph, out of additional nodes"); //no path in complete graph
         }
 
         F flowChange = augmentFlow(result_vid);
@@ -437,12 +442,12 @@ public:
     /*
      * Increase the demand of a particular customer
      */
-    void increaseCapacity(I vid) {
+    F increaseCapacity(I vid) {
         this->node_excess[vid] -= 1;
         //before capacity was changed, all excesses were zero. Then, one changed
         //As a result of matchVertex routine, no any other vertex can loose its matching
         //because any path is "continuous"
-        matchVertex(vid);
+        return matchVertex(vid);
     }
 
     void calculateResult() {
