@@ -36,28 +36,39 @@ int main(int argc, const char** argv) {
     }
     po::notify(vm);
 
-    Network net(filename);
-    std::ofstream outf(out_filename, std::ios::out);
-    outf << "{";
-    outf << "\"id\": \"" << net.id << "\",";
     try {
-        FacilityChooser fcla(net, facilities_to_locate, facility_capacity, lambda, check_connectivity);
-        fcla.locateFacilities();
-        fcla.calculateResult();
+    	Network net(filename);
+	std::ofstream outf(out_filename, std::ios::out);
+	outf << "{";
+	outf << "\"id\": \"" << net.id << "\",";
+	
+	FacilityChooser fcla(net, facilities_to_locate, facility_capacity, lambda, check_connectivity);
+	
+	outf << "\"number of facilities\": " << fcla.required_facilities << ",";
+	outf << "\"capacity of facilities\":" << fcla.facility_capacity << ",";
+	outf << "\"lambda\":" << fcla.lambda << ",";
+	
+	fcla.locateFacilities();
+	fcla.calculateResult();
 
-        outf << "\"number of facilities\": " << fcla.required_facilities << ",";
-        outf << "\"capacity of facilities\":" << fcla.facility_capacity << ",";
-        outf << "\"lambda\":" << fcla.lambda << ",";
-        outf << "\"objective\":" << fcla.totalCost << ",";
-        outf << "\"runtime\":" << fcla.runtime;
+	if (fcla.error_message != "") {
+		outf << "\"error\":\"" << fcla.error_message << "\"";
+        	cout << "Error: " << fcla.error_message << endl;
+	} else {
+		
+		outf << "\"objective\":" << fcla.totalCost << ",";
+		outf << "\"runtime\":" << fcla.runtime;
 
-        cout << fcla.totalCost << " " << fcla.runtime << endl;
+		cout << fcla.totalCost << " " << fcla.runtime << endl;
+ 
+	}
+    
+       outf << "}";
+       outf.close();
+
     } catch (string e) {
-        outf << "\"error\":\"" << e << "\"";
-        cout << "Error: " << e << endl;
+	cout << e << endl;
     }
-    outf << "}";
-    outf.close();
 
     return 0;
 }

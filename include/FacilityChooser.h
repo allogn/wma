@@ -39,6 +39,7 @@ public:
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
         this->error_message = "";
+	this->facility_capacity = facility_capacity;
 
         if (check_connectivity == 1) {
             igraph_bool_t check_connected;
@@ -46,10 +47,10 @@ public:
             if (!check_connected) {
                 //this is important because if one location should be placed - there should be a possibility of
                 //checking the distance from each customer (creation of an edge in bipartite graph)
-                throw std::string("Network must be weakly connected");
+                this->error_message = std::string("Network must be weakly connected");
             }
             if (facilities_to_locate*facility_capacity < network.source_indexes.size()) {
-                throw std::string("Problem infeasible: not enough facilities");
+                this->error_message = std::string("Problem infeasible: not enough facilities");
             }
         }
 
@@ -215,7 +216,8 @@ public:
     }
 
     void locateFacilities() {
-
+	if (this->error_message != "")
+		return;
         auto start_time = std::chrono::high_resolution_clock::now();
         this->run(); //calculate preliminary matching
 
@@ -293,6 +295,10 @@ public:
     }
 
     long calculateResult() {
+	if (this->error_message != "") {
+		totalCost = -1;
+		return -1;
+	}
         //calculate Total Sum
         if (this->result.size() != this->required_facilities) {
             throw std::string("Facilities are not located");

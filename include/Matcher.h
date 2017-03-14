@@ -369,6 +369,8 @@ public:
             IGRAPH_EIT_NEXT(eit);
         }
         igraph_eit_destroy(&eit);
+	igraph_es_destroy(&forward_es);
+	igraph_es_destroy(&backward_es);
 
         //current node contains the source node after while loop, so we change node_excess
         node_excess[target] -= min_excess;
