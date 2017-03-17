@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-for REP in {1..100..1};
+for REP in {1..1..1};
 do
-    ${FCLA_ROOT}/bin/generator -n 4096 -o ${DATA_PATH}/geometric/perf -g 0 -s 256 --density 2
+    ${FCLA_ROOT}/bin/generator -n 256 -o ./ -g 0 -s 8 --density 2
 done
 echo "Generation done."
