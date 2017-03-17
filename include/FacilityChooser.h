@@ -324,10 +324,6 @@ public:
     }
 
     long calculateResult() {
-	if (this->error_message != "") {
-		totalCost = -1;
-		return -1;
-	}
         //calculate Total Sum
         if (this->state == UNFEASIBLE) {
             this->totalCost = -1;

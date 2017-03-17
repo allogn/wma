@@ -114,7 +114,7 @@ public:
             }
             igraph_vector_destroy(&neis);
             //sort values
-            std::sort(edgeQueue[i].begin(), edgeQueue[i].end(), [](newEdge& a, newEdge& b) {
+            std::sort(edgeQueue[i].begin(), edgeQueue[i].end(), [](const newEdge a, const newEdge b) {
                 return a.weight > b.weight;
             });
         }
