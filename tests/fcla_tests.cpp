@@ -57,7 +57,7 @@ BOOST_AUTO_TEST_CASE (basicFacilityLocation) {
     igraph_t graph;
     igraph_empty(&graph, 4, false);
     igraph_vector_t edges;
-    igraph_real_t edge_array[20] = {0,1,1,2,0,2};
+    igraph_real_t edge_array[6] = {0,1,1,2,0,2};
     igraph_vector_init_copy(&edges, edge_array, 6);
     igraph_add_edges(&graph, &edges, NULL);
     igraph_vector_destroy(&edges);

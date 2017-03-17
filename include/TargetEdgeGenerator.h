@@ -26,9 +26,9 @@ public:
     std::vector<long> is_target;
 
     //because we must have weights
-    TargetEdgeGenerator(Matcher<long,long,long>* matcher, EdgeGenerator* edge_explorer, std::vector<long>& target_indexes) {
+    TargetEdgeGenerator(Matcher<long,long,long>* matcher, std::vector<long>& target_indexes) {
         this->matcher = matcher;
-        this->edge_explorer = edge_explorer;
+        this->edge_explorer = matcher->edge_generator;
         this->target_indexes = target_indexes;
 
         //get some variables from edge_explorer

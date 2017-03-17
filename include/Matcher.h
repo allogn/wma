@@ -108,11 +108,12 @@ public:
         backtrack.resize(graph_size);
     }
 
-    Matcher(EdgeGenerator* edge_generator, std::vector<W>& node_excess) {
+    Matcher(EdgeGenerator* edge_generator, std::vector<W>& node_excess, Logger* logger) {
         graph_size = node_excess.size();
         igraph_empty(&graph, graph_size, true); //create directed graph
         this->edge_generator = edge_generator;
-        this->node_excess = node_excess;
+        this->node_excess = node_excess; //@todo this is too much. should be just capacity of facilities?
+        this->logger = logger;
         reset();
     }
 
@@ -406,7 +407,7 @@ public:
     F matchVertex(I source_id)
     {
         if (node_excess[source_id] >= 0)
-            throw std::string("Only nodes with negative excess can be matched");
+            throw "Only nodes with negative excess can be matched";
 
         this->iteration_init(source_id);
 

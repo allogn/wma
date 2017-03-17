@@ -344,8 +344,8 @@ public:
         for (long i = 0; i < this->source_indexes.size(); i++) {
             new_excess[i] = -1;
         }
-        TargetEdgeGenerator short_bigraph_generator(this, this->edge_generator, this->result);
-        Matcher<long,long,long> M(&short_bigraph_generator, new_excess);
+        TargetEdgeGenerator short_bigraph_generator(this, this->result);
+        Matcher<long,long,long> M(&short_bigraph_generator, new_excess, this->logger);
         M.run();
         M.calculateResult();
         this->totalCost = M.result_weight;

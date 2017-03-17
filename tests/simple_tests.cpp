@@ -8,6 +8,10 @@
 #include <boost/test/included/unit_test.hpp>
 #include "RoadNetwork.h"
 #include "Bipartite.h"
+#include "TargetEdgeGenerator.h"
+#include "Matcher.h"
+#include "Network.h"
+#include "ExploringEdgeGenerator.h"
 
 BOOST_AUTO_TEST_CASE (example_test)
 {
@@ -131,4 +135,31 @@ BOOST_AUTO_TEST_CASE (bipartiteGraphMatching) {
     igraph_vector_long_t result_matching;
     igraph_vector_long_init(&result_matching, 0);
     bi.igraph_max_matching(&result_weight, &result_matching); //check for runtime errors
+}
+
+BOOST_AUTO_TEST_CASE (tergetgenerator) {
+    igraph_t graph;
+    igraph_empty(&graph, 4, false);
+    igraph_vector_t edges;
+    igraph_real_t edge_array[6] = {0,1,0,2,2,3};
+    igraph_vector_init_copy(&edges, edge_array, 6);
+    igraph_add_edges(&graph, &edges, NULL);
+    igraph_vector_destroy(&edges);
+    std::vector<long> weights = {1,2,3};
+    std::vector<long> source_node_index = {0};  //@todo source node index must be consistent with node excess for matchers
+
+    Network network(&graph, weights, source_node_index);
+    ExploringEdgeGenerator<long, long> old_generator(network);
+
+    std::vector<long> node_excess({-1,1,1,1,1});
+    Matcher<long,long,long> M(&old_generator, node_excess);
+    M.run();
+
+    std::vector<long> targets({3});
+    std::vector<long> node_excess2({-1,1});
+    TargetEdgeGenerator generator(&M, targets);
+    Matcher<long,long,long> M2(&generator, node_excess2);
+    M2.run();
+    M2.calculateResult();
+    BOOST_CHECK_EQUAL(M2.result_weight, 5);
 }

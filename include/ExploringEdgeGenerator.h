@@ -76,7 +76,13 @@ public:
     }
 
     ExploringEdgeGenerator(Network& network) {
-        this->ExploringEdgeGenerator(&network.graph, network.weights, network.source_indexes);
+        //init dijkstra heaps
+        node_count_in_network = igraph_vcount(&network.graph);
+        this->n = network.source_indexes.size();
+        this->source_node_index = network.source_indexes;
+        this->graph = &network.graph;
+        this->weights = network.weights;
+        init_dijkstra();
     }
 
     /*
