@@ -22,9 +22,6 @@ public:
     Network(std::string filename) {
         this->load(filename);
     }
-    Network(igraph_t* g) {
-        igraph_copy(&this->graph, g);
-    }
     Network(igraph_t* g,
             std::vector<long>& weights,
             std::vector<long>& source_indexes) {

@@ -9,6 +9,7 @@
 #include <vector>
 #include <limits>
 #include "EdgeGenerator.h"
+#include "Network.h"
 #include "nheap.h"
 
 template<typename I, typename W>

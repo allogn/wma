@@ -1,3 +1,10 @@
+/*
+ * Facility matching main file
+ */
+
+
+#define _DEBUG_ 10
+
 #include <iostream>
 #include <fstream>
 #include <boost/program_options.hpp>
@@ -6,6 +13,7 @@
 #include "Network.h"
 #include "FacilityChooser.h"
 #include "igraph/igraph.h"
+#include "Logger.h"
 
 using namespace std;
 namespace po = boost::program_options;
@@ -15,7 +23,7 @@ int main(int argc, const char** argv) {
     long facilities_to_locate;
     long facility_capacity;
     long lambda;
-    int check_connectivity;
+    int debug;
     string out_filename;
 
     po::options_description desc("Allowed options");
@@ -25,7 +33,6 @@ int main(int argc, const char** argv) {
             ("facilities,n", po::value<long>(&facilities_to_locate)->required(), "Facilities to locate")
             ("faccap,c", po::value<long>(&facility_capacity)->default_value(1), "Capacity of facilities")
             ("lambda,l", po::value<long>(&lambda)->default_value(0), "Parameter lambda, top-k facility heap threshold")
-            ("connect", po::value<int>(&check_connectivity)->default_value(1), "0/1(def) if to check graph connectivity before fcla")
             ("output,o", po::value<string>(&out_filename)->required(), "Output file");
 
     po::variables_map vm;
@@ -37,27 +44,18 @@ int main(int argc, const char** argv) {
     po::notify(vm);
 
     Network net(filename);
-    std::ofstream outf(out_filename, std::ios::out);
-    outf << "{";
-    outf << "\"id\": \"" << net.id << "\",";
-    try {
-        FacilityChooser fcla(net, facilities_to_locate, facility_capacity, lambda, check_connectivity);
-        fcla.locateFacilities();
-        fcla.calculateResult();
+    Logger logger;
 
-        outf << "\"number of facilities\": " << fcla.required_facilities << ",";
-        outf << "\"capacity of facilities\":" << fcla.facility_capacity << ",";
-        outf << "\"lambda\":" << fcla.lambda << ",";
-        outf << "\"objective\":" << fcla.totalCost << ",";
-        outf << "\"runtime\":" << fcla.runtime;
-
-        cout << fcla.totalCost << " " << fcla.runtime << endl;
-    } catch (string e) {
-        outf << "\"error\":\"" << e << "\"";
-        cout << "Error: " << e << endl;
+    FacilityChooser fcla(net, facilities_to_locate, facility_capacity, &logger, lambda);
+    fcla.locateFacilities();
+    fcla.calculateResult();
+    switch(fcla.state) {
+        case FacilityChooser::LOCATED:
+            cout << logger.int_dict["objective"][0] << " " << logger.float_dict["runtime"][0] << endl;
+            break;
+        default:
+            cout << "Error " << logger.str_dict["error"][0] << endl;
     }
-    outf << "}";
-    outf.close();
-
+    logger.save(out_filename);
     return 0;
 }

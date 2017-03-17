@@ -4,10 +4,12 @@
 
 #define BOOST_TEST_MODULE fcla_tests
 #include <boost/test/included/unit_test.hpp>
-#include <EdgeGenerator.h>
+#include "EdgeGenerator.h"
 #include "helpers.h"
 #include "ExploringEdgeGenerator.h"
+#include "Network.h"
 #include "FacilityChooser.h"
+#include "Logger.h"
 
 BOOST_AUTO_TEST_CASE (testExplorator) {
     //generate random graph, calculate all-to-all distances and compare them with ExploringGenerator results.
@@ -62,7 +64,10 @@ BOOST_AUTO_TEST_CASE (basicFacilityLocation) {
     std::vector<long> weights = {4,2,1};
     std::vector<long> source_node_index = {0,1};
 
-    FacilityChooser fcla(&graph, weights, source_node_index, 1,2,0);
+    Network network(&graph, weights, source_node_index);
+    Logger logger;
+
+    FacilityChooser fcla(network, 1, 2, &logger);
     fcla.locateFacilities();
     BOOST_REQUIRE_EQUAL(fcla.result.size(),1);
     BOOST_REQUIRE_EQUAL(fcla.result[0], 2);
@@ -76,7 +81,8 @@ BOOST_AUTO_TEST_CASE (testDuple) {
     std::vector<long> sources = {0,4};
     create_graph(&graph, 5, edges);
     Network net(&graph, weights, sources);
-    FacilityChooser fcla(net, 1, 2);
+    Logger logger;
+    FacilityChooser fcla(net, 1, 2, &logger);
     fcla.locateFacilities();
     fcla.calculateResult();
     BOOST_CHECK_EQUAL(fcla.result.size(), 1);
@@ -91,7 +97,8 @@ BOOST_AUTO_TEST_CASE (testTripple) {
     std::vector<long> sources = {0,2,3};
     create_graph(&graph, 4, edges);
     Network net(&graph, weights, sources);
-    FacilityChooser fcla(net, 1, 3);
+    Logger logger;
+    FacilityChooser fcla(net, 1, 3, &logger);
     fcla.locateFacilities();
     fcla.calculateResult();
     BOOST_CHECK_EQUAL(fcla.result.size(), 1);
@@ -106,7 +113,8 @@ BOOST_AUTO_TEST_CASE (test3Tripple) {
     std::vector<long> sources = {0,3,5};
     create_graph(&graph, 7, edges);
     Network net(&graph, weights, sources);
-    FacilityChooser fcla(net, 2, 2);
+    Logger logger;
+    FacilityChooser fcla(net, 2, 2, &logger);
     fcla.locateFacilities();
     fcla.calculateResult();
     BOOST_CHECK_EQUAL(fcla.result.size(), 2);

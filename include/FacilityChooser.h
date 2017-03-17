@@ -1,25 +1,40 @@
+/*
+* 5 levels of debug is supported
+* 0 : no any checking or stats at all
+* 1 : input feasibility check
+* 2 : advanced stats included
+* 3 : debug info included
+* 4 : everything else included
+*/
+
 #ifndef FCLA_FACILITYCHOOSER_H
 #define FCLA_FACILITYCHOOSER_H
 
 #include <forward_list>
 #include <fstream>
-#include <chrono>
 #include "nheap.h"
 #include "ExploringEdgeGenerator.h"
+#include "TargetEdgeGenerator.h"
 #include "Matcher.h"
 #include "Network.h"
+#include "Logger.h"
+#include "helpers.h"
 
 class FacilityChooser : public Matcher<long,long,long> {
 public:
+    enum State {
+        UNINITIALIZED, NOT_LOCATED, LOCATED, UNFEASIBLE, ERROR
+    };
+
     fHeap<long,long> heap; //one makes heap to have max first
     std::vector<long> result;
     long totalCost;
     long required_facilities;
-    double runtime;
     std::string exp_id;
-    std::string error_message;
     long facility_capacity;
     std::vector<long> source_indexes;
+    State state = UNINITIALIZED;
+
     /*
      * lambda is a parameter that states when to terminate the heap exploration
      * it is equal to a minimal service filling required for considering that service
@@ -34,37 +49,46 @@ public:
     FacilityChooser(Network& network,
                     long facilities_to_locate,
                     long facility_capacity,
-                    long lambda = 0,
-                    int check_connectivity = 1) {
+                    Logger* logger,
+                    long lambda = 0) {
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
-        this->error_message = "";
+        this->facility_capacity = facility_capacity;
+        this->logger = logger;
 
-        if (check_connectivity == 1) {
-            igraph_bool_t check_connected;
-            igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
-            if (!check_connected) {
-                //this is important because if one location should be placed - there should be a possibility of
-                //checking the distance from each customer (creation of an edge in bipartite graph)
-                throw std::string("Network must be weakly connected");
-            }
-            if (facilities_to_locate*facility_capacity < network.source_indexes.size()) {
-                throw std::string("Problem infeasible: not enough facilities");
-            }
-        }
+        logger->add("number of facilities", facilities_to_locate);
+        logger->add("capacity of facilities", facility_capacity);
+        logger->add("lambda", lambda);
 
-        heap.sign = 1; //make heap decreasing
-
+        this->heap.sign = 1; //make heap decreasing
         this->required_facilities = facilities_to_locate;
         this->lambda = lambda;
 
         //for Matching Algorithm (base class)
         graph_size = network.source_indexes.size() + igraph_vcount(&network.graph);
+        logger->add("bipartite graph size", graph_size);
+
         igraph_empty(&graph, graph_size, true); //create directed graph
         this->node_excess.resize(graph_size,-1);
         for (long i = network.source_indexes.size(); i < graph_size; i++) {
             node_excess[i] = facility_capacity;
         }
+
+#if _DEBUG_ > 0
+        //should check here because no access to network in the rest of the code
+        //(assuming facility chooser may not have been initialized on a network)
+        logger->start("connectivity check time");
+        igraph_bool_t check_connected;
+        igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
+        if (!check_connected) {
+            //this is important because if one location should be placed - there should be a possibility of
+            //checking the distance from each customer (creation of an edge in bipartite graph)
+            logger->add("error", "Network must be weakly connected");
+            this->state = UNFEASIBLE;
+            return;
+        }
+        logger->finish("connectivity check time");
+#endif
 
         this->edge_generator = new ExploringEdgeGenerator<long,long>(&(network.graph),
                                                                      network.weights,
@@ -72,33 +96,7 @@ public:
 
         //reset variables of the matching algorithm
         reset();
-    }
-
-    FacilityChooser(igraph_t* network,
-                    std::vector<long>& weights,
-                    std::vector<long>& source_node_index,
-                    long facilities_to_locate,
-                    long facility_capacity,
-                    long lambda = 0)
-    {
-        heap.sign = 1; //make heap decreasing
-
-        this->required_facilities = facilities_to_locate;
-        this->lambda = lambda;
-
-        //for Matching Algorithm (base class)
-        graph_size = source_node_index.size() + igraph_vcount(network);
-        igraph_empty(&graph, graph_size, true); //create directed graph
-        this->node_excess.resize(graph_size,-1);
-        this->facility_capacity = facility_capacity;
-        for (long i = source_node_index.size(); i < graph_size; i++) {
-            node_excess[i] = facility_capacity;
-        }
-
-        this->edge_generator = new ExploringEdgeGenerator<long,long>(network, weights, source_node_index);
-
-        //reset variables of the matching algorithm
-        reset();
+        this->state = NOT_LOCATED;
     }
 
     ~FacilityChooser() {
@@ -170,6 +168,9 @@ public:
      * Returns false if no set cover exists within current lambda
      */
     bool findSetCover() {
+#if _DEBUG_ > 1
+        logger->start("set cover check time");
+#endif
         //initialize single linked lists and heaps
         result.clear();
         heap.clear();
@@ -189,7 +190,7 @@ public:
 
                 /* check if there is non-zero flow from a service to a customer
                  * if so - there is also a matching, otherwise skip.
-                 * for exmpale:
+                 * for example:
                  * init: A -> B (excess 3)
                  *       A <- B (excess 0 == full edge)
                  * after matching:
@@ -209,27 +210,55 @@ public:
             matchings.push_back(linked_nodes);
         }
         igraph_vector_destroy(&eids);
-
         //now run greedy algorithm, that chooses the best subset from a heap
-        return greedySetCover(matchings);
+
+#if _DEBUG_ > 1
+        //logging outside function because of multiple returns inside
+        logger->start("greedy set cover time");
+#endif
+        bool result = greedySetCover(matchings);
+
+#if _DEBUG_ > 1
+        logger->finish("greedy set cover time");
+        logger->finish("set cover check time");
+#endif
+
+        return result;
     }
 
     void locateFacilities() {
+        if (this->state != NOT_LOCATED) return; //probably infeasible because of initialization checks
 
-        auto start_time = std::chrono::high_resolution_clock::now();
-        this->run(); //calculate preliminary matching
+        if (this->required_facilities*this->facility_capacity < this->edge_generator->n) {
+            logger->add("error", "Problem infeasible: not enough facilities");
+            this->state = UNFEASIBLE;
+            return;
+        }
+
+        logger->start("runtime");
+
+        //calculate preliminary matching
+        logger->start("prematching time");
+        this->run();
+        logger->finish("prematching time");
 
         // increase customer capacities until we can choose a covering subset of matched services
+        long capacity_iteration = 0;
         while (!this->findSetCover()) {
+            capacity_iteration++;
             //increase capacities of everyone
             for (long vid = 0; vid < source_count; vid++) {
                 this->increaseCapacity(vid);
             }
         }
+        logger->add("number of iterations", capacity_iteration);
+
         /*
          * we place "free" facilities right near the customers with "farthest" matching
          * so in calculateResult function we must recalculate distances
          */
+        logger->add("facilities left after termination", (long)(required_facilities - this->result.size()));
+        logger->start("lack facility allocation time");
         if (this->result.size() < required_facilities) {
             //find the total number of available facilities
             long facilities_left = required_facilities - this->result.size();
@@ -242,8 +271,9 @@ public:
                     this->result.push_back(this->source_indexes[0]);
                 }
 
-                auto finish_time = std::chrono::high_resolution_clock::now();
-                this->runtime = std::chrono::duration_cast<std::chrono::seconds>(finish_time-start_time).count();
+                logger->finish("lack facility allocation time");
+                logger->finish("runtime");
+                this->state = LOCATED;
                 return;
             }
             //get worst <facilities_left> covered customers by existing result
@@ -288,33 +318,40 @@ public:
                 this->result.push_back(new_location-this->source_count); //put location in a network
             }
         }
-        auto finish_time = std::chrono::high_resolution_clock::now();
-        this->runtime = std::chrono::duration<double, std::deci>(finish_time-start_time).count()/10.;
+        logger->finish("lack facility allocation time");
+        logger->finish("runtime");
+        this->state = LOCATED;
     }
 
     long calculateResult() {
         //calculate Total Sum
-        if (this->result.size() != this->required_facilities) {
-            throw std::string("Facilities are not located");
+        if (this->state == UNFEASIBLE) {
+            this->totalCost = -1;
+            return -1;
         }
-        totalCost = 0;
-        for (long i = 0; i < this->source_count; i++) {
-            //find closest facility for each customer
-            long closest_dist = LONG_MAX;
-            for (long j = 0; j < this->result.size(); j++) {
-                long bipart_facility_vid = this->result[j] + this->source_count;
-                igraph_integer_t eid;
-                //note here, that eid might not be presented in bipartite graph
-                //if a facility is too far from a customer which is not the target one for this facility
-                //so we assume in this case that this facility is not the closest for a customer,
-                //but then the result may have an error here and should be tested for correctness @todo
-                igraph_get_eid(&graph, &eid, i, bipart_facility_vid, true, false);
-                if (eid != -1) {
-                    closest_dist = min(closest_dist, this->weights[eid]);
-                }
-            }
-            totalCost += closest_dist;
+        if (this->state != LOCATED) {
+            throw "Wrong class state: calculate locations first.";
         }
+        logger->start("result final calculation time");
+
+        //run matching in resulting biparite graph, but having capacity of 1 only and having customers
+        //on the right side of bipartite graph
+
+        //build valid bipartite graph : reverse all edges to the direct position
+        //create an edge generator with calculated distances between known facilities and customers
+        //run new matcher
+        std::vector<long> new_excess(this->source_indexes.size() + this->result.size(),this->facility_capacity);
+        for (long i = 0; i < this->source_indexes.size(); i++) {
+            new_excess[i] = -1;
+        }
+        TargetEdgeGenerator short_bigraph_generator(this, this->edge_generator, this->result);
+        Matcher<long,long,long> M(&short_bigraph_generator, new_excess);
+        M.run();
+        M.calculateResult();
+        this->totalCost = M.result_weight;
+
+        logger->finish("result final calculation time");
+        logger->add("objective", totalCost);
         return totalCost;
     }
 };

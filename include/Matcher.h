@@ -13,6 +13,7 @@
 #include "nheap.h"
 #include "helpers.h"
 #include "EdgeGenerator.h"
+#include "Logger.h"
 
 /*
  * Template types stand for
@@ -22,8 +23,10 @@ template<typename F, typename W, typename I>
 class Matcher {
 public:
     const W INF_W = std::numeric_limits<W>::max();
+    //bigraph
     igraph_t graph;
     EdgeGenerator* edge_generator;
+    Logger* logger;
 
     //global variables (throughout the algorithm)
     std::vector<W> potentials;
@@ -69,7 +72,7 @@ public:
                 source_count = i;
             }
             if ((node_excess[i] < 0) && (source_count != -1)) {
-                throw std::string("Node Excess array must contain first sources, then targets");
+                throw "Node Excess array must contain first sources, then targets";
             }
         }
 
@@ -179,6 +182,10 @@ public:
      */
     I dijkstra()
     {
+#if _DEBUG_ > 1
+        //log time for dijsktra execution. The sum of all times is important, dynamics can be important too
+        logger->start("dijkstra");
+#endif
         I current_node; //must be of type "long" instead "igraph_integer_t". Otherwise change mmHeap type (idx is always of long type)
         while(dheap.dequeue(current_node) != 0) //heap is not empty
         {
@@ -187,6 +194,9 @@ public:
             if (node_excess[current_node] > 0) {
                 //enheap back the last node in order to return the same (best) result
                 dheap.enqueue(current_node, mindist[current_node]);
+#if _DEBUG_ > 1
+                logger->finish("dijkstra");
+#endif
                 return current_node; //already contains correct path distance in both backtrack and mindist arrays
             }
             //update minimum distances to all neighbors
@@ -218,6 +228,9 @@ public:
             }
             igraph_vector_destroy(&eids);
         }
+#if _DEBUG_ > 1
+        logger->finish("dijkstra");
+#endif
         return -1; //no path exist
     }
 
