@@ -183,10 +183,6 @@ public:
      */
     I dijkstra()
     {
-#if _DEBUG_ > 1
-        //log time for dijsktra execution. The sum of all times is important, dynamics can be important too
-        logger->start("dijkstra");
-#endif
         I current_node; //must be of type "long" instead "igraph_integer_t". Otherwise change mmHeap type (idx is always of long type)
         while(dheap.dequeue(current_node) != 0) //heap is not empty
         {
@@ -195,9 +191,6 @@ public:
             if (node_excess[current_node] > 0) {
                 //enheap back the last node in order to return the same (best) result
                 dheap.enqueue(current_node, mindist[current_node]);
-#if _DEBUG_ > 1
-                logger->finish("dijkstra");
-#endif
                 return current_node; //already contains correct path distance in both backtrack and mindist arrays
             }
             //update minimum distances to all neighbors
@@ -229,9 +222,6 @@ public:
             }
             igraph_vector_destroy(&eids);
         }
-#if _DEBUG_ > 1
-        logger->finish("dijkstra");
-#endif
         return -1; //no path exist
     }
 
@@ -291,9 +281,18 @@ public:
         igraph_integer_t target_id = -1;
         while (target_id == -1) {
             //run Dijkstra
+#if _DEBUG_ > 1
+            //log time for dijsktra execution. The sum of all times is important, dynamics can be important too
+            logger->start("dijkstra");
+#endif
             target_id = dijkstra();
 
+#if _DEBUG_ > 1
+            logger->finish("dijkstra");
+#endif
+
             //if current residual graph is full, then return target_id or exception
+            logger->start("add edge time");
             if (target_id == -1) {
                 if (!addHeapedEdge()) {
                     return false;
@@ -305,6 +304,7 @@ public:
                     target_id = -1; //invalidate result if new edge is added, otherwise return current result
                 }
             }
+            logger->finish("add edge time");
         }
         *result_vid = target_id;
         return true;
@@ -420,6 +420,9 @@ public:
 
         //enlarge graph until valid path is found, or throw an exception
         I result_vid;
+
+        logger->start("find and enlarge");
+
         if (!findAndEnlarge(&result_vid))
         {
             /*
@@ -430,8 +433,15 @@ public:
 //            throw std::string("No valid matching in the graph, out of additional nodes"); //no path in complete graph
         }
 
+        logger->finish("find and enlarge");
+        logger->start("augment flow");
+
         F flowChange = augmentFlow(result_vid);
+        logger->finish("augment flow");
+
+        logger->start("update potentials");
         updatePotentials(result_vid);
+        logger->finish("update potentials");
 
 //        print_graph<W,F>(&graph, weights, edge_excess);
         return flowChange;

@@ -247,9 +247,15 @@ public:
         while (!this->findSetCover()) {
             capacity_iteration++;
             //increase capacities of everyone
+#if _DEBUG_ > 1
+            logger->start("increase capacity time");
+#endif
             for (long vid = 0; vid < source_count; vid++) {
                 this->increaseCapacity(vid);
             }
+#if _DEBUG_ > 1
+            logger->finish("increase capacity time");
+#endif
         }
         logger->add("number of iterations", capacity_iteration);
 

@@ -74,42 +74,44 @@ public:
 
         for (auto it = str_dict.begin(); it != str_dict.end(); it++) {
             if (it->second.size() == 1) {
-                outf << "\"" << it->first << "\":\"" << it->second[0] << "\",";
+                outf << "\"" << it->first << "\":\"" << it->second[0] << "\",\n";
             } else {
                 outf << "\"" << it->first << "\":[";
                 for (long i = 0; i < it->second.size()-1; i++) {
-                    outf << "\"" << it->second[i] << "\",";
+                    outf << "\"" << it->second[i] << "\",\n";
                 }
-                outf << "\"" << it->second[it->second.size()-1] << "\"],";
+                outf << "\"" << it->second[it->second.size()-1] << "\"],\n";
             }
         }
         for (auto it = float_dict.begin(); it != float_dict.end(); it++) {
             if (it->second.size() == 1) {
-                outf << "\"" << it->first << "\":" << it->second[0] << ",";
+                outf << "\"" << it->first << "\":" << it->second[0] << ",\n";
             } else {
                 outf << "\"" << it->first << "\":[";
                 for (long i = 0; i < it->second.size()-1; i++) {
-                    outf << it->second[i] << ",";
+                    outf << it->second[i] << ",\n";
                 }
-                outf << it->second[it->second.size()-1] << "],";
+                outf << it->second[it->second.size()-1] << "],\n";
             }
         }
         for (auto it = int_dict.begin(); it != int_dict.end(); it++) {
             if (it->second.size() == 1) {
-                outf << "\"" << it->first << "\":" << it->second[0] << ",";
+                outf << "\"" << it->first << "\":" << it->second[0] << ",\n";
             } else {
                 outf << "\"" << it->first << "\":[";
                 for (long i = 0; i < it->second.size()-1; i++) {
                     outf << it->second[i] << ",";
                 }
-                outf << it->second[it->second.size()-1] << "],";
+                outf << it->second[it->second.size()-1] << "],\n";
             }
         }
 
-	std::chrono::time_point<std::chrono::system_clock> now;
-	now = std::chrono::system_clock::now();
-	std::time_t end_time = std::chrono::system_clock::to_time_t(now);
-        outf << "\"Created\":\"" << std::ctime(&end_time) << "\"";
+        std::chrono::time_point<std::chrono::system_clock> now;
+        now = std::chrono::system_clock::now();
+        std::time_t end_time = std::chrono::system_clock::to_time_t(now);
+        std::string tt = std::string(std::ctime(&end_time));
+        tt = tt.substr(0,tt.size()-1);
+        outf << "\"Created\":\"" << tt << "\"\n";
         outf << "}";
     }
 };
