@@ -295,7 +295,7 @@ public:
                 //traverse each matched customer in the bipartite graph
                 igraph_vector_t eids;
                 igraph_vector_init(&eids, 0);
-                igraph_incident(&graph, &eids, i, IGRAPH_OUT);
+                igraph_incident(&graph, &eids, location_vid, IGRAPH_OUT);
                 for (igraph_integer_t i = 0; i < igraph_vector_size(&eids); i++) {
                     igraph_integer_t eid = VECTOR(eids)[i];
                     if (edge_excess[eid] == 0) continue; //no matching
