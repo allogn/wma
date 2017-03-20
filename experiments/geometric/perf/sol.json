@@ -1,1 +1,8 @@
-{"id": "1489477933114818190","number of facilities": 64,"capacity of facilities":16,"lambda":0,"objective":0,"runtime":0}
+{"capacity of facilities":16,
+"lambda":0,
+"number of facilities":16,
+"objective":5694,
+"result final calculation time":0.00543,
+"runtime":0.051837,
+"Created":"Mon Mar 20 15:38:07 2017"
+}
