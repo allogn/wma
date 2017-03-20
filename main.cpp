@@ -43,8 +43,11 @@ int main(int argc, const char** argv) {
     }
     po::notify(vm);
 
-    Network net(filename);
     Logger logger;
+    logger.start("total time");
+    logger.start2("reading file");
+    Network net(filename);
+    logger.finish2("reading file");
 
     FacilityChooser fcla(net, facilities_to_locate, facility_capacity, &logger, lambda);
     fcla.locateFacilities();
@@ -56,6 +59,7 @@ int main(int argc, const char** argv) {
         default:
             cout << "Error " << logger.str_dict["error"][0] << endl;
     }
+    logger.finish("total time");
     logger.save(out_filename);
     return 0;
 }

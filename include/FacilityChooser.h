@@ -51,6 +51,7 @@ public:
                     long facility_capacity,
                     Logger* logger,
                     long lambda = 0) {
+        logger->start2("fcla initialization");
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
         this->facility_capacity = facility_capacity;
@@ -98,6 +99,7 @@ public:
         //reset variables of the matching algorithm
         reset();
         this->state = NOT_LOCATED;
+        logger->finish("fcla initialization");
     }
 
     ~FacilityChooser() {
