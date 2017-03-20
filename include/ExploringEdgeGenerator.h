@@ -79,6 +79,7 @@ public:
         //init dijkstra heaps
         node_count_in_network = igraph_vcount(&network.graph);
         this->n = network.source_indexes.size();
+        this->m = node_count_in_network;
         this->source_node_index = network.source_indexes;
         this->graph = &network.graph;
         this->weights = network.weights;
@@ -96,6 +97,7 @@ public:
         //init dijkstra heaps
         node_count_in_network = igraph_vcount(g);
         this->n = source_node_index.size();
+        this->m = igraph_vcount(g);
         this->source_node_index = source_node_index;
         this->graph = g;
         this->weights = weights;

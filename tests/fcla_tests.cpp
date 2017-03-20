@@ -121,3 +121,5 @@ BOOST_AUTO_TEST_CASE (test3Tripple) {
     BOOST_CHECK((fcla.result[0] == 2) || (fcla.result[1] == 2));
     igraph_destroy(&graph);
 }
+
+//@todo test residual allocations

@@ -23,7 +23,8 @@ typedef std::vector<newEdge> newEdges;
 
 class EdgeGenerator {
 public:
-    long n; //number of vertices for generation
+    long n; //number of vertices for generation (left side)
+    long m; //number of target vertices
     newEdges edgeMemory;
 
     void save(std::string filename) {
@@ -90,6 +91,7 @@ public:
     newEdges edgeQueue;
     LoadedEdgeGenerator(std::string filename) {
         this->n = 0;
+        this->m = 0;
         this->load(filename);
     }
     ~LoadedEdgeGenerator() {}
@@ -120,6 +122,7 @@ public:
             e.weight = vect[4];
             edgeMemory.push_back(e);
             this->n = std::max(n, (long)e.source_node);
+            this->m = std::max(m, (long)e.target_node);
         }
         f.close();
         edgeQueue = edgeMemory;
@@ -156,7 +159,6 @@ public:
     std::vector<std::vector<long>> neighbors;
     std::vector<long> next_neighbor_id;
     igraph_rng_t rng;
-    long capacity;
 
     /*
      * Create a generator for n nodes
@@ -165,8 +167,8 @@ public:
      * Every edge will have a capacity equal to capacity of a target node
      */
     RandomEdgeGenerator(long n, long target_start_vid, long target_vcount, long target_capacity) {
-        this->capacity = target_capacity;
         this->n = n;
+        this->m = target_vcount;
         prev_weights.resize(n,0);
 
         igraph_rng_init(&rng, &igraph_rngtype_mt19937);
@@ -203,7 +205,7 @@ public:
             new_edge.weight = igraph_rng_get_integer(&rng, prev_weights[vid], prev_weights[vid]+100);
             new_edge.target_node = neighbors[vid][next_neighbor_id[vid]++];
             new_edge.exists = true;
-            new_edge.capacity = this->capacity;
+            new_edge.capacity = 1;
             edgeMemory.push_back(new_edge);
             prev_weights[vid] = new_edge.weight;
         } else {

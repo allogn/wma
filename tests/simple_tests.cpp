@@ -152,13 +152,14 @@ BOOST_AUTO_TEST_CASE (tergetgenerator) {
     ExploringEdgeGenerator<long, long> old_generator(network);
 
     std::vector<long> node_excess({-1,1,1,1,1});
-    Matcher<long,long,long> M(&old_generator, node_excess);
+    Logger logger;
+    Matcher<long,long,long> M(&old_generator, node_excess, &logger);
     M.run();
 
     std::vector<long> targets({3});
     std::vector<long> node_excess2({-1,1});
     TargetEdgeGenerator generator(&M, targets);
-    Matcher<long,long,long> M2(&generator, node_excess2);
+    Matcher<long,long,long> M2(&generator, node_excess2, &logger);
     M2.run();
     M2.calculateResult();
     BOOST_CHECK_EQUAL(M2.result_weight, 5);

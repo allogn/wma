@@ -56,6 +56,7 @@ public:
         this->facility_capacity = facility_capacity;
         this->logger = logger;
 
+
         logger->add("number of facilities", facilities_to_locate);
         logger->add("capacity of facilities", facility_capacity);
         logger->add("lambda", lambda);
@@ -63,16 +64,6 @@ public:
         this->heap.sign = 1; //make heap decreasing
         this->required_facilities = facilities_to_locate;
         this->lambda = lambda;
-
-        //for Matching Algorithm (base class)
-        graph_size = network.source_indexes.size() + igraph_vcount(&network.graph);
-        logger->add("bipartite graph size", graph_size);
-
-        igraph_empty(&graph, graph_size, true); //create directed graph
-        this->node_excess.resize(graph_size,-1);
-        for (long i = network.source_indexes.size(); i < graph_size; i++) {
-            node_excess[i] = facility_capacity;
-        }
 
 #if _DEBUG_ > 0
         //should check here because no access to network in the rest of the code
@@ -93,6 +84,16 @@ public:
         this->edge_generator = new ExploringEdgeGenerator<long,long>(&(network.graph),
                                                                      network.weights,
                                                                      network.source_indexes);
+        graph_size = edge_generator->n + edge_generator->m;
+        source_count = edge_generator->n;
+
+        //for Matching Algorithm (base class)
+        logger->add("bipartite graph size", graph_size);
+
+        this->node_excess.resize(graph_size,-1);
+        for (long i = network.source_indexes.size(); i < graph_size; i++) {
+            node_excess[i] = facility_capacity;
+        }
 
         //reset variables of the matching algorithm
         reset();
@@ -107,12 +108,12 @@ public:
     bool greedySetCover(std::vector<std::forward_list<long>>& matchings) {
         //note that matching for target with vid=VID in the matching graph
         //will have VID-source_count index in matchings array because that one contains matchings only for targets
-        std::vector<bool> covered(source_count, false);
+        std::vector<bool> covered(this->source_count, false);
         long total_covered = 0;
         while (heap.size() > 0) {
             long id, init_matching_count;
             heap.dequeue(id, init_matching_count);
-            long only_target_id = id - source_count; //id in matchings, #of target node without source nodes
+            long only_target_id = id - this->source_count; //id in matchings, #of target node without source nodes
             long matching_count = 0;
             // check which matched vertex is still not covered and delete covered ones
 
@@ -157,7 +158,7 @@ public:
                     covered[(*it)] = true;
                     total_covered++;
                 }
-                if (total_covered == this->source_count) {
+                if (total_covered == source_count) {
                     return true;
                 }
             }
@@ -178,29 +179,13 @@ public:
         // go through graph services and enheap them
         // according to the number of covered facilities = number of outgoing edges
         //for each service - put in a heap with a value = # of matched vertices
-        igraph_vector_t eids;
-        igraph_vector_init(&eids,0);
         for (long i = source_count; i < graph_size; i++) {
             forward_list<long> linked_nodes;
-            igraph_incident(&graph, &eids, i, IGRAPH_OUT);
             //there can be many matched vertices because of capacities
             long matching_count = 0;
-            for (igraph_integer_t i = 0; i < igraph_vector_size(&eids); i++) {
-                igraph_integer_t eid = VECTOR(eids)[i];
-
-                /* check if there is non-zero flow from a service to a customer
-                 * if so - there is also a matching, otherwise skip.
-                 * for example:
-                 * init: A -> B (excess 3)
-                 *       A <- B (excess 0 == full edge)
-                 * after matching:
-                 *       A -> B (excess 2)
-                 *       A <- B (excess 1 => one unit was matched)
-                 */
-                if (edge_excess[eid] == 0) continue;
-                igraph_integer_t target_node, source_node;
-                igraph_edge(&graph,eid,&source_node,&target_node);
-                linked_nodes.push_front(target_node);
+            EdgeIterator it;
+            for (it = edges[i].begin(); it != edges[i].end(); it++) {
+                linked_nodes.push_front(it->first);
                 matching_count++;
             }
             //put in a heap
@@ -209,7 +194,6 @@ public:
             }
             matchings.push_back(linked_nodes);
         }
-        igraph_vector_destroy(&eids);
         //now run greedy algorithm, that chooses the best subset from a heap
 
 #if _DEBUG_ > 1
@@ -229,7 +213,7 @@ public:
     void locateFacilities() {
         if (this->state != NOT_LOCATED) return; //probably infeasible because of initialization checks
 
-        if (this->required_facilities*this->facility_capacity < this->edge_generator->n) {
+        if (this->required_facilities*this->facility_capacity < source_count) {
             logger->add("error", "Problem infeasible: not enough facilities");
             this->state = UNFEASIBLE;
             return;
@@ -270,10 +254,10 @@ public:
             long facilities_left = required_facilities - this->result.size();
             if (this->source_count <= facilities_left) {
                 //trivial solution - objective, objective = 0, place facilities in customer locations
-                for (long i = 0; i < this->source_count; i++) {
+                for (long i = 0; i < source_count; i++) {
                     this->result.push_back(this->source_indexes[i]);
                 }
-                for (long i = 0; i < facilities_left - this->source_count; i++) {
+                for (long i = 0; i < facilities_left - source_count; i++) {
                     this->result.push_back(this->source_indexes[0]);
                 }
 
@@ -283,29 +267,20 @@ public:
                 return;
             }
             //get worst <facilities_left> covered customers by existing result
-            //go throught all customers and for each find the smallest (best) option
+            //go through all customers and for each find the smallest (best) option
             //then choose top-<facilities_left> options
-            std::vector<long> source_best(this->source_count, LONG_MAX);
+            std::vector<long> source_best(source_count, LONG_MAX);
             for (long i = 0; i < this->result.size(); i++) {
                 //each element in result array is a facility location
                 //bipartite graph still holds customers that were matched to that location
                 //note that one customer can be matched with several facilities
                 //so for current facility location we get all covered customers, add (or update!) them in the heap
-                long location_vid = this->result[i] + this->source_count; //result contains ids in a network graph
+                long location_vid = this->result[i] + source_count; //result contains ids in a network graph
                 //traverse each matched customer in the bipartite graph
-                igraph_vector_t eids;
-                igraph_vector_init(&eids, 0);
-                igraph_incident(&graph, &eids, location_vid, IGRAPH_OUT);
-                for (igraph_integer_t i = 0; i < igraph_vector_size(&eids); i++) {
-                    igraph_integer_t eid = VECTOR(eids)[i];
-                    if (edge_excess[eid] == 0) continue; //no matching
-                    igraph_integer_t target_node, source_node; //target node is a left(source) node in bipartite graph
-                    igraph_edge(&graph,eid,&source_node,&target_node);
-                    //target node now is vid of a customer and |weights of edge| is the distance
-                    long cur_dist = -this->weights[eid]; //minus because the edge is inverted
-                    source_best[target_node] = std::min(source_best[target_node], cur_dist);
+                for (EdgeIterator it = edges[location_vid].begin(); it != edges[location_vid].end(); it++) {
+                    long cur_dist = -it->second; //minus because the edge is inverted
+                    source_best[it->first] = std::min(source_best[it->first], cur_dist);
                 }
-                igraph_vector_destroy(&eids);
             }
             //now get top-k and add to the result
             fHeap<long,long> partialHeapsort;

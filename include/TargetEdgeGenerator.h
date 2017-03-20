@@ -33,6 +33,7 @@ public:
 
         //get some variables from edge_explorer
         this->n = edge_explorer->n;
+        this->m = target_indexes.size();
         reset();
     }
     ~TargetEdgeGenerator() {}
@@ -79,7 +80,7 @@ public:
          * in bipartite graph in matcher. so, in general non-network case, the right side is a set of all potential locations
          * and only id of a potential location can be returned by a generator
          */
-        is_target.resize(igraph_vcount(&this->matcher->graph) - this->n,-1); //size of bipartite is size of sources plus targets
+        is_target.resize(this->matcher->edge_generator->m,-1); //size of bipartite is size of sources plus targets
         for (long i = 0; i < target_indexes.size(); i++) {
             is_target[target_indexes[i]] = i;
         }
@@ -92,29 +93,15 @@ public:
         edgeQueue.clear();
         edgeQueue.resize(this->n, empty_vec);
 
-        //traverse neighbors of each node and save those which are targets to edgeQueue;
-        for (long i = 0; i < this->n; i++) {
-            igraph_vector_t neis;
-            igraph_vector_init(&neis,0);
-            igraph_neighbors(&this->matcher->graph, &neis, i, IGRAPH_OUT);
-            for (long j = 0; j < igraph_vector_size(&neis); j++) {
-                long neig_vid = VECTOR(neis)[j];
-                igraph_integer_t eid;
-                igraph_get_eid(&this->matcher->graph, &eid, i, neig_vid, true, true);
-                long w = this->matcher->weights[eid];
-                if (is_target[neig_vid - this->n] > -1) {
-                    newEdge new_edge;
-                    new_edge.weight = w;
-                    new_edge.source_node = i;
-                    new_edge.target_node = this->n + is_target[neig_vid - this->n];
-                    new_edge.capacity = 1;
-                    new_edge.exists = true;
-                    edgeQueue[i].push_back(new_edge);
-                }
+        //traverse all memorized edges and add those which are relevant to the current targets
+        for (long i = 0; i < this->matcher->edge_generator->edgeMemory.size(); i++) {
+            newEdge e = this->matcher->edge_generator->edgeMemory[i];
+            if (is_target[e.target_node - this->n] > -1) {
+                e.target_node = this->n + is_target[e.target_node - this->n];
+                edgeQueue[e.source_node].push_back(e);
             }
-            igraph_vector_destroy(&neis);
             //sort values
-            std::sort(edgeQueue[i].begin(), edgeQueue[i].end(), [](const newEdge a, const newEdge b) {
+            std::sort(edgeQueue[e.source_node].begin(), edgeQueue[e.source_node].end(), [](const newEdge a, const newEdge b) {
                 return a.weight > b.weight;
             });
         }

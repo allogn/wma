@@ -7,6 +7,7 @@
 
 #include <string>
 #include <vector>
+#include <forward_list>
 #include <igraph/igraph.h>
 #include <limits>
 #include <algorithm>
@@ -23,19 +24,20 @@ template<typename F, typename W, typename I>
 class Matcher {
 public:
     const W INF_W = std::numeric_limits<W>::max();
-    //bigraph
-    igraph_t graph;
+    //bigraph as two linked lists, storing only non-full edges
+    typedef std::pair<I,W> Edge;
+    typedef std::forward_list<Edge> Adjlist;
+    typedef typename Adjlist::iterator EdgeIterator;
+    std::vector<Adjlist> edges;
+    std::vector<F> node_excess;
     EdgeGenerator* edge_generator;
     Logger* logger;
 
     //global variables (throughout the algorithm)
     std::vector<W> potentials;
-    std::vector<F> node_excess;
-    std::vector<F> edge_excess;
-    std::vector<W> weights;
     I graph_size;
-    I source_count;
     newEdges new_edges;
+    I source_count;
 
     //local variables (preserve only for one iteration)
     std::vector<W> mindist;
@@ -45,7 +47,6 @@ public:
 
     //arrays with results
     W result_weight;
-    std::vector<std::vector<I>> result_matching;
 
     void empty_new_edges() {
         new_edges.clear();
@@ -58,22 +59,9 @@ public:
 
     void reset() {
         potentials.resize(graph_size, 0);
-        weights.clear();
-        edge_excess.clear();
-        result_matching.clear();
+        edges.resize(graph_size);
         for (I i = 0; i < graph_size; i++) {
-            std::vector<I> vec;
-            result_matching.push_back(vec);
-        }
-
-        source_count = -1;
-        for (I i = 0; i < graph_size; i++) {
-            if ((node_excess[i] >= 0) && (source_count == -1)) {
-                source_count = i;
-            }
-            if ((node_excess[i] < 0) && (source_count != -1)) {
-                throw "Node Excess array must contain first sources, then targets";
-            }
+            edges[i].clear();
         }
 
         //init with a first nearest neighbor for all source vertices
@@ -88,38 +76,24 @@ public:
         backtrack.resize(graph_size);
     }
 
-    Matcher() {
-        //pass variable initialization to FacilityChooser
-    }
+    //for Facility Location inheritance
+    Matcher() {}
 
-    //for testing purposes
-    Matcher(I graph_size) {
-        this->graph_size = graph_size;
-        igraph_empty(&graph, graph_size, true);
-        mindist.resize(graph_size);
-        backtrack.resize(graph_size);
-    }
-
-    //for testing purposes
-    Matcher(igraph_t* g) {
-        igraph_copy(g, &graph);
-        this->graph_size = igraph_vcount(g);
-        mindist.resize(graph_size);
-        backtrack.resize(graph_size);
-    }
-
-    Matcher(EdgeGenerator* edge_generator, std::vector<W>& node_excess, Logger* logger) {
-        graph_size = node_excess.size();
-        igraph_empty(&graph, graph_size, true); //create directed graph
+    Matcher(EdgeGenerator* edge_generator, std::vector<F>& node_excess, Logger* logger) {
         this->edge_generator = edge_generator;
-        this->node_excess = node_excess; //@todo this is too much. should be just capacity of facilities?
+        this->graph_size = edge_generator->n + edge_generator->m;
+        this->source_count = edge_generator->n;
+        /*
+         * This class supports any negative demand for sources and positive demand for targets
+         * Edge generator in its turn also contains number of sources and targets
+         * So consistency should be checks //@todo check consistency
+         */
+        this->node_excess = node_excess;
         this->logger = logger;
         reset();
     }
 
-    ~Matcher() {
-        igraph_destroy(&graph);
-    }
+    ~Matcher() {}
 
     /*
      * Get Cost of an Edge according to potential values of vertices
@@ -194,21 +168,13 @@ public:
                 return current_node; //already contains correct path distance in both backtrack and mindist arrays
             }
             //update minimum distances to all neighbors
-            igraph_vector_t eids;
-            igraph_vector_init(&eids,0);
-            igraph_incident(&graph, &eids, current_node, IGRAPH_OUT);
-            for (igraph_integer_t i = 0; i < igraph_vector_size(&eids); i++) {
-                igraph_integer_t eid = VECTOR(eids)[i];
-                //check if the current edge is full then do not consider it
-                if (edge_excess[eid] == 0) continue;
-                //otherwise update distance to target node
-                igraph_integer_t target_node, source_node;
-                igraph_edge(&graph,eid,&source_node,&target_node);
-                W new_cost = mindist[source_node];
-                new_cost += edgeCost(weights[eid], source_node, target_node);
+            for (EdgeIterator it = edges[current_node].begin(); it != edges[current_node].end(); it++) {
+                W new_cost = mindist[current_node];
+                I target_node = it->first;
+                new_cost += edgeCost(it->second, current_node, target_node);
                 if (updateMindist(target_node, new_cost)) {
                     //update breadcrumbs
-                    backtrack[target_node] = source_node;
+                    backtrack[target_node] = current_node;
                     //update or enqueue target node
                     dheap.updateorenqueue(target_node, new_cost);
                     //maintain global heap (value for target_node was changed because of mindist
@@ -220,7 +186,6 @@ public:
                     }
                 }
             }
-            igraph_vector_destroy(&eids);
         }
         return -1; //no path exist
     }
@@ -231,13 +196,7 @@ public:
     void addNewEdge(newEdge new_edge)
     {
         //add a new edge
-        igraph_add_edge(&graph, new_edge.source_node, new_edge.target_node);
-        weights.push_back(new_edge.weight);
-        edge_excess.push_back(new_edge.capacity);
-        //add an inverted edge to a bigraph
-        igraph_add_edge(&graph, new_edge.target_node, new_edge.source_node);
-        weights.push_back(-new_edge.weight);
-        edge_excess.push_back(0);
+        edges[new_edge.source_node].push_front(std::make_pair(new_edge.target_node, new_edge.weight));
 
         //updating Dijkstra heap by adding source_node to a heap:
         //note, that we don't have to check all outgoing edges, but consideration of the new edge
@@ -261,7 +220,9 @@ public:
         addNewEdge(new_edges[source_node]);
 
         // update vector with next nearest weights
+        logger->start("make new edge");
         newEdge next_new_edge = edge_generator->getEdge(source_node);
+        logger->finish("make new edge");
         new_edges[source_node] = next_new_edge;
         // enqueue the next new value in gheap
         if (next_new_edge.exists) {
@@ -292,7 +253,6 @@ public:
 #endif
 
             //if current residual graph is full, then return target_id or exception
-            logger->start("add edge time");
             if (target_id == -1) {
                 if (!addHeapedEdge()) {
                     return false;
@@ -304,7 +264,6 @@ public:
                     target_id = -1; //invalidate result if new edge is added, otherwise return current result
                 }
             }
-            logger->finish("add edge time");
         }
         *result_vid = target_id;
         return true;
@@ -335,64 +294,52 @@ public:
      */
     F augmentFlow(I target)
     {
+        /*
+         * Any augmentation is always 1 because each edge can handle max 1 flow (==assignment), even if
+         * there is begger capacities between source and target
+         * This is specific to the application, because multicapacity of a customer
+         * means that this customer explores more, but not that there are many customers at one place
+         */
         I current_node = target;
         //find minimum excess on the way and make it maximum flow increase
         F min_excess = INF_W;
 
-        //path selectors, igraph needed for igraph_es_pairs call
-        igraph_vector_t forward_vids;
-        igraph_vector_t backward_vids;
-        igraph_vector_init(&backward_vids, 0);
-
+        //iterate throw forward path and reassign edges to the opposite nodes (flip them)
         while (backtrack[current_node] != current_node) {
-            igraph_vector_push_back(&backward_vids, current_node);
-            igraph_vector_push_back(&backward_vids, backtrack[current_node]);
-            current_node = backtrack[current_node];
-        }
-        igraph_vector_copy(&forward_vids, &backward_vids);
-        igraph_vector_reverse(&forward_vids);
+            //find an edge in adj list
+            I target_node = current_node; //note this! we are back-propagating
+            I source_node = backtrack[current_node];
 
-        igraph_es_t forward_es;
-        igraph_es_t backward_es;
-        igraph_es_pairs(&forward_es, &forward_vids, true);//directed graph
-        igraph_es_pairs(&backward_es, &backward_vids, true);
-
-        //iterate through forward path and find maximum flow
-        igraph_eit_t eit;
-        igraph_eit_create(&graph, forward_es, &eit);
-        while (!IGRAPH_EIT_END(eit)) {
-            igraph_integer_t eid = IGRAPH_EIT_GET(eit);
-            min_excess = min(min_excess, edge_excess[eid]);
-            IGRAPH_EIT_NEXT(eit);
+            //find an edge
+            EdgeIterator it = edges[source_node].begin();
+            //we should erase *it, change weight to the opposite and assign to target
+            //note that linked list has only "remove after" operation
+            W weight;
+            if (it->first == target_node) {
+                weight = -it->second;
+                edges[source_node].pop_front();
+            } else {
+                EdgeIterator prev_it = it;
+                it++;
+                while(true) { //strong assumption on graph structure consistency
+                    if (it->first == target_node) {
+                        break;
+                    }
+                    prev_it = it;
+                    it++;
+                }
+                weight = -it->second;
+                edges[source_node].erase_after(prev_it);
+            }
+            edges[target_node].push_front(std::make_pair(source_node,weight));
+            current_node = source_node;
         }
-        min_excess = min(min_excess, node_excess[target]);
-        min_excess = min(min_excess, -node_excess[current_node]);
-
-        //iterate throw both paths and change excess
-        IGRAPH_EIT_RESET(eit);
-        while (!IGRAPH_EIT_END(eit)) {
-            igraph_integer_t eid = IGRAPH_EIT_GET(eit);
-            edge_excess[eid] = edge_excess[eid] - min_excess;
-            IGRAPH_EIT_NEXT(eit);
-        }
-        igraph_eit_destroy(&eit);
-        igraph_eit_create(&graph, backward_es, &eit);
-        while (!IGRAPH_EIT_END(eit)) {
-            igraph_integer_t eid = IGRAPH_EIT_GET(eit);
-            edge_excess[eid] = edge_excess[eid] + min_excess;
-            IGRAPH_EIT_NEXT(eit);
-        }
-        igraph_eit_destroy(&eit);
-	igraph_es_destroy(&forward_es);
-	igraph_es_destroy(&backward_es);
 
         //current node contains the source node after while loop, so we change node_excess
-        node_excess[target] -= min_excess;
-        node_excess[current_node] += min_excess;
+        node_excess[target] -= 1;
+        node_excess[current_node] += 1;
 
-        igraph_vector_destroy(&backward_vids);
-        igraph_vector_destroy(&forward_vids);
-        return min_excess;
+        return 1;
     }
 
 
@@ -476,27 +423,14 @@ public:
         return matchVertex(vid);
     }
 
-    void calculateResult() {
+    void calculateResult() { //@todo remove result matching from everywhere
         //arrange an answer
         result_weight = 0;
-        igraph_vector_t neis;
-        igraph_vector_init(&neis,0);
-        for (I i = 0; i < source_count; i++) {
-            igraph_neighbors(&graph, &neis, i, IGRAPH_IN);
-            igraph_integer_t matched_id;
-            //there can be many matched vertices because of capacities
-            for (I j = 0; j < igraph_vector_size(&neis); j++) {
-                igraph_integer_t eid;
-                igraph_get_eid(&graph, &eid, VECTOR(neis)[j], i, true, true);
-                if (edge_excess[eid]>0) {
-                    matched_id = VECTOR(neis)[j];
-                    result_matching[i].push_back(matched_id);
-                    result_matching[matched_id].push_back(i);
-                    result_weight -= weights[eid]*edge_excess[eid];
-                }
+        for (I i = source_count; i < graph_size; i++) {
+            for (EdgeIterator it = edges[i].begin(); it != edges[i].end(); it++) {
+                result_weight += abs(it->second);
             }
         }
-        igraph_vector_destroy(&neis);
     }
 
 };
