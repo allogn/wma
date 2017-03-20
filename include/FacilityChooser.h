@@ -1,7 +1,7 @@
 /*
 * 5 levels of debug is supported
 * 0 : no any checking or stats at all
-* 1 : input feasibility check
+* 1 : input feasibility check and basic stats
 * 2 : advanced stats included
 * 3 : debug info included
 * 4 : everything else included
@@ -68,7 +68,7 @@ public:
 #if _DEBUG_ > 0
         //should check here because no access to network in the rest of the code
         //(assuming facility chooser may not have been initialized on a network)
-        logger->start("connectivity check time");
+        logger->start1("connectivity check time");
         igraph_bool_t check_connected;
         igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
         if (!check_connected) {
@@ -78,7 +78,7 @@ public:
             this->state = UNFEASIBLE;
             return;
         }
-        logger->finish("connectivity check time");
+        logger->finish1("connectivity check time");
 #endif
 
         this->edge_generator = new ExploringEdgeGenerator<long,long>(&(network.graph),
@@ -88,7 +88,7 @@ public:
         source_count = edge_generator->n;
 
         //for Matching Algorithm (base class)
-        logger->add("bipartite graph size", graph_size);
+        logger->add2("bipartite graph size", graph_size);
 
         this->node_excess.resize(graph_size,-1);
         for (long i = network.source_indexes.size(); i < graph_size; i++) {
@@ -169,9 +169,7 @@ public:
      * Returns false if no set cover exists within current lambda
      */
     bool findSetCover() {
-#if _DEBUG_ > 1
-        logger->start("set cover check time");
-#endif
+        logger->start2("set cover check time");
         //initialize single linked lists and heaps
         result.clear();
         heap.clear();
@@ -196,16 +194,11 @@ public:
         }
         //now run greedy algorithm, that chooses the best subset from a heap
 
-#if _DEBUG_ > 1
         //logging outside function because of multiple returns inside
-        logger->start("greedy set cover time");
-#endif
+        logger->start2("greedy set cover time");
         bool result = greedySetCover(matchings);
-
-#if _DEBUG_ > 1
-        logger->finish("greedy set cover time");
-        logger->finish("set cover check time");
-#endif
+        logger->finish2("greedy set cover time");
+        logger->finish2("set cover check time");
 
         return result;
     }
@@ -222,33 +215,29 @@ public:
         logger->start("runtime");
 
         //calculate preliminary matching
-        logger->start("prematching time");
+        logger->start2("prematching time");
         this->run();
-        logger->finish("prematching time");
+        logger->finish2("prematching time");
 
         // increase customer capacities until we can choose a covering subset of matched services
         long capacity_iteration = 0;
         while (!this->findSetCover()) {
             capacity_iteration++;
             //increase capacities of everyone
-#if _DEBUG_ > 1
-            logger->start("increase capacity time");
-#endif
+            logger->start2("increase capacity time");
             for (long vid = 0; vid < source_count; vid++) {
                 this->increaseCapacity(vid);
             }
-#if _DEBUG_ > 1
-            logger->finish("increase capacity time");
-#endif
+            logger->finish2("increase capacity time");
         }
-        logger->add("number of iterations", capacity_iteration);
+        logger->add1("number of iterations", capacity_iteration);
 
         /*
          * we place "free" facilities right near the customers with "farthest" matching
          * so in calculateResult function we must recalculate distances
          */
-        logger->add("facilities left after termination", (long)(required_facilities - this->result.size()));
-        logger->start("lack facility allocation time");
+        logger->add1("facilities left after termination", (long)(required_facilities - this->result.size()));
+        logger->start2("lack facility allocation time");
         if (this->result.size() < required_facilities) {
             //find the total number of available facilities
             long facilities_left = required_facilities - this->result.size();
@@ -261,7 +250,7 @@ public:
                     this->result.push_back(this->source_indexes[0]);
                 }
 
-                logger->finish("lack facility allocation time");
+                logger->finish2("lack facility allocation time");
                 logger->finish("runtime");
                 this->state = LOCATED;
                 return;
@@ -299,7 +288,7 @@ public:
                 this->result.push_back(new_location-this->source_count); //put location in a network
             }
         }
-        logger->finish("lack facility allocation time");
+        logger->finish2("lack facility allocation time");
         logger->finish("runtime");
         this->state = LOCATED;
     }

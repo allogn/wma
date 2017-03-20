@@ -15,13 +15,12 @@ class Logger {
 public:
     std::map<std::string, std::vector<std::string>> str_dict;
     std::map<std::string, std::vector<double>> float_dict;
-    std::map<std::string, std::vector<long>> int_dict;
     std::map<std::string, clock_t> opened_times;
 
     Logger() {}
     ~Logger() {}
 
-    void add(std::string key, std::string val) {
+    inline void add(std::string key, std::string val) {
         std::map<std::string, std::vector<std::string>>::iterator it;
         if (it != str_dict.end()) {
             str_dict[key].push_back(val);
@@ -29,7 +28,7 @@ public:
             str_dict[key] = std::vector<std::string>({val});
         }
     }
-    void add(std::string key, double val) {
+    inline void add(std::string key, double val) {
         std::map<std::string, std::vector<double>>::iterator it;
         if (it != float_dict.end()) {
             float_dict[key].push_back(val);
@@ -37,24 +36,58 @@ public:
             float_dict[key] = std::vector<double>({val});
         }
     }
-    void add(std::string key, long val) {
-        std::map<std::string, std::vector<long>>::iterator it;
-        if (it != int_dict.end()) {
-            int_dict[key].push_back(val);
+
+    inline void add1(std::string key, std::string val) {
+#if _DEBUG_ > 0
+        std::map<std::string, std::vector<std::string>>::iterator it;
+        if (it != str_dict.end()) {
+            str_dict[key].push_back(val);
         } else {
-            int_dict[key] = std::vector<long>({val});
+            str_dict[key] = std::vector<std::string>({val});
         }
+#endif
+    }
+    inline void add1(std::string key, double val) {
+#if _DEBUG_ > 0
+        std::map<std::string, std::vector<double>>::iterator it;
+        if (it != float_dict.end()) {
+            float_dict[key].push_back(val);
+        } else {
+            float_dict[key] = std::vector<double>({val});
+        }
+#endif
+    }
+
+    inline void add2(std::string key, std::string val) {
+#if _DEBUG_ > 1
+        std::map<std::string, std::vector<std::string>>::iterator it;
+        if (it != str_dict.end()) {
+            str_dict[key].push_back(val);
+        } else {
+            str_dict[key] = std::vector<std::string>({val});
+        }
+#endif
+    }
+    inline void add2(std::string key, double val) {
+#if _DEBUG_ > 1
+        std::map<std::string, std::vector<double>>::iterator it;
+        if (it != float_dict.end()) {
+            float_dict[key].push_back(val);
+        } else {
+            float_dict[key] = std::vector<double>({val});
+        }
+#endif
     }
 
     /*
      * Timeit
      */
-    void start(std::string key) {
+    inline void start(std::string key) {
         clock_t begin = clock();
         opened_times[key] = begin;
     }
 
-    void finish(std::string key) {
+    inline void finish(std::string key) {
         clock_t end = clock();
         clock_t begin = opened_times[key];
         double elapsed = double(end - begin) / CLOCKS_PER_SEC;
@@ -66,6 +99,52 @@ public:
         } else {
             float_dict[key] = std::vector<double>({elapsed});
         }
+    }
+
+    inline void start1(std::string key) {
+#if _DEBUG_ > 0
+        clock_t begin = clock();
+        opened_times[key] = begin;
+#endif
+    }
+
+    inline void finish1(std::string key) {
+#if _DEBUG_ > 0
+        clock_t end = clock();
+        clock_t begin = opened_times[key];
+        double elapsed = double(end - begin) / CLOCKS_PER_SEC;
+
+        std::map<std::string, std::vector<double>>::iterator it;
+        it = float_dict.find(key);
+        if (it != float_dict.end()) {
+            float_dict[key].push_back(elapsed);
+        } else {
+            float_dict[key] = std::vector<double>({elapsed});
+        }
+#endif
+    }
+
+    inline void start2(std::string key) {
+#if _DEBUG_ > 1
+        clock_t begin = clock();
+        opened_times[key] = begin;
+#endif
+    }
+
+    inline void finish2(std::string key) {
+#if _DEBUG_ > 1
+        clock_t end = clock();
+        clock_t begin = opened_times[key];
+        double elapsed = double(end - begin) / CLOCKS_PER_SEC;
+
+        std::map<std::string, std::vector<double>>::iterator it;
+        it = float_dict.find(key);
+        if (it != float_dict.end()) {
+            float_dict[key].push_back(elapsed);
+        } else {
+            float_dict[key] = std::vector<double>({elapsed});
+        }
+#endif
     }
 
     void save(std::string out_filename) {
@@ -90,17 +169,6 @@ public:
                 outf << "\"" << it->first << "\":[";
                 for (long i = 0; i < it->second.size()-1; i++) {
                     outf << it->second[i] << ",\n";
-                }
-                outf << it->second[it->second.size()-1] << "],\n";
-            }
-        }
-        for (auto it = int_dict.begin(); it != int_dict.end(); it++) {
-            if (it->second.size() == 1) {
-                outf << "\"" << it->first << "\":" << it->second[0] << ",\n";
-            } else {
-                outf << "\"" << it->first << "\":[";
-                for (long i = 0; i < it->second.size()-1; i++) {
-                    outf << it->second[i] << ",";
                 }
                 outf << it->second[it->second.size()-1] << "],\n";
             }

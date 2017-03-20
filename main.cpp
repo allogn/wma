@@ -51,7 +51,7 @@ int main(int argc, const char** argv) {
     fcla.calculateResult();
     switch(fcla.state) {
         case FacilityChooser::LOCATED:
-            cout << logger.int_dict["objective"][0] << " " << logger.float_dict["runtime"][0] << endl;
+            cout << logger.float_dict["objective"][0] << " " << logger.float_dict["runtime"][0] << endl;
             break;
         default:
             cout << "Error " << logger.str_dict["error"][0] << endl;

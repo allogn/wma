@@ -220,9 +220,9 @@ public:
         addNewEdge(new_edges[source_node]);
 
         // update vector with next nearest weights
-        logger->start("make new edge");
+        logger->start2("make new edge");
         newEdge next_new_edge = edge_generator->getEdge(source_node);
-        logger->finish("make new edge");
+        logger->finish2("make new edge");
         new_edges[source_node] = next_new_edge;
         // enqueue the next new value in gheap
         if (next_new_edge.exists) {
@@ -242,15 +242,10 @@ public:
         igraph_integer_t target_id = -1;
         while (target_id == -1) {
             //run Dijkstra
-#if _DEBUG_ > 1
             //log time for dijsktra execution. The sum of all times is important, dynamics can be important too
-            logger->start("dijkstra");
-#endif
+            logger->start2("dijkstra");
             target_id = dijkstra();
-
-#if _DEBUG_ > 1
-            logger->finish("dijkstra");
-#endif
+            logger->finish2("dijkstra");
 
             //if current residual graph is full, then return target_id or exception
             if (target_id == -1) {
@@ -356,7 +351,9 @@ public:
         if (node_excess[source_id] >= 0)
             throw "Only nodes with negative excess can be matched";
 
+        logger->start2("iteration init");
         this->iteration_init(source_id);
+        logger->finish2("iteration init");
 
         //nearest_edges array is global, but gheap is local. In order to descrease heap size we enheap
         //only those nodes which were visited by the algorithm (relevant)
@@ -368,7 +365,7 @@ public:
         //enlarge graph until valid path is found, or throw an exception
         I result_vid;
 
-        logger->start("find and enlarge");
+        logger->start2("find and enlarge");
 
         if (!findAndEnlarge(&result_vid))
         {
@@ -380,15 +377,15 @@ public:
 //            throw std::string("No valid matching in the graph, out of additional nodes"); //no path in complete graph
         }
 
-        logger->finish("find and enlarge");
-        logger->start("augment flow");
+        logger->finish2("find and enlarge");
+        logger->start2("augment flow");
 
         F flowChange = augmentFlow(result_vid);
-        logger->finish("augment flow");
+        logger->finish2("augment flow");
 
-        logger->start("update potentials");
+        logger->start2("update potentials");
         updatePotentials(result_vid);
-        logger->finish("update potentials");
+        logger->finish2("update potentials");
 
 //        print_graph<W,F>(&graph, weights, edge_excess);
         return flowChange;
