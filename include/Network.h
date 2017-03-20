@@ -66,19 +66,36 @@ public:
         long vcount, ecount, source_num;
         infile >> this->id >> vcount >> ecount >> source_num;
         igraph_empty(&graph, vcount, false);
+        igraph_vector_t edges;
+        igraph_vector_init(&edges, ecount*2);
         weights.clear();
+        weights.reserve(ecount);
         for (long i = 0; i < ecount; i++) {
             long from, to, weight, capacity;
             infile >> from >> to >> weight;
-            igraph_add_edge(&this->graph, from, to);
+            VECTOR(edges)[2*i] = from;
+            VECTOR(edges)[2*i + 1] = to;
             weights.push_back(weight);
         }
+        igraph_add_edges(&this->graph, &edges, 0);
         source_indexes.clear();
+        source_indexes.reserve(source_num);
         for (long i = 0; i < source_num; i++) {
             long source_id;
             infile >> source_id;
             source_indexes.push_back(source_id);
         }
+
+        //check if consistent
+//        for (long i = 0; i < ecount; i++) {
+//            igraph_integer_t from;
+//            igraph_integer_t to;
+//            igraph_edge(&graph, i, &from, &to);
+//            if ((from != VECTOR(edges)[2*i]) || (to != VECTOR(edges)[2*i+1])) {
+//                throw "not valid";
+//            }
+//        }
+        igraph_vector_destroy(&edges);
     }
 };
 
