@@ -57,7 +57,7 @@ public:
         this->facility_capacity = facility_capacity;
         this->logger = logger;
 
-
+	logger->add("id", network.id);
         logger->add("number of facilities", facilities_to_locate);
         logger->add("capacity of facilities", facility_capacity);
         logger->add("lambda", lambda);
