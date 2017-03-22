@@ -23,3 +23,6 @@ Experiment setup:
 - create ipynb notebook in experiments/analysis folder
 - load data by scripts/mergeResults.py script, save resulting dataframe in temporal File in experiments folder
 - plot and analyze
+
+OSM downloads:
+https://mapzen.com/data/metro-extracts/

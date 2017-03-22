@@ -12,6 +12,7 @@
 
 #include <forward_list>
 #include <fstream>
+#include <stack>
 #include "nheap.h"
 #include "ExploringEdgeGenerator.h"
 #include "TargetEdgeGenerator.h"
@@ -40,6 +41,8 @@ public:
      * it is equal to a minimal service filling required for considering that service
      */
     long lambda;
+
+    FacilityChooser() {}; //for testing
 
     /*
      * The matching bipartite graph has two node sets:
@@ -165,6 +168,105 @@ public:
                 }
             }
         }
+        throw "Something is wrong";
+        return false; //never should reach this
+    }
+
+    /*
+     * Fulfills result with a set of facilities that cover all customers or returns false if does not exist
+     *
+     * Idea: vector of counters for each customer - if covered. Then take a set of facilities (maybe ordered) //@todo check if ordered by overlapping measure is better?
+     * And in a tree traversal way try to exclude up to F'-F facilities until a valid set is found
+     */
+    bool treeCover(std::vector<long>& facility_candidates) {
+        std::vector<long> customer_cover(this->source_count,0);
+        //get a set of top-lambda facilities, each represents a set of covered customers
+        //populare cover vector with all candidates
+        for (long i = 0; i < facility_candidates.size(); i++) {
+            long facility_id = facility_candidates[i];
+            //iterate through all customers covered by this facility
+            for (EdgeIterator it = edges[facility_id].begin(); it != edges[facility_id].end(); it++) {
+                customer_cover[it->first]++;
+            }
+        }
+
+        for (long i = 0; i < customer_cover.size(); i++) {
+            if (customer_cover[i] == 0) return false;
+        }
+
+        std::stack<long> index_stack; //each index is a facility index in facility_candidates array
+        index_stack.push(0);
+        while (index_stack.size() > 0) {
+            long current_index = index_stack.top();
+            long facility_id = facility_candidates[current_index];
+            bool valid = true;
+
+            //substract covered customers from coverage vector
+            for (EdgeIterator it = edges[facility_id].begin(); it != edges[facility_id].end(); it++) {
+                customer_cover[it->first]--;
+                //if any of touched customers is now zero : invalidate current index by removing it from stack
+                if (customer_cover[it->first] == 0) {
+                    valid = false;
+                    //do not break here because we need to increase back coverage later
+                }
+            }
+
+            //now we have either valid current index on the top of the stack or ancestor on the top
+            //that is not equal to current_index
+
+            //if we have valid current index, then we should check if we eliminated enough facilities
+            //number of eliminated facilities is equal to the size of stack because the last element is valid
+            //(remain all customers covered)
+            if (valid && (index_stack.size() == facility_candidates.size() - this->required_facilities)) {
+                //solution found
+                break;
+            }
+
+            /*
+             * check whether we have enough facilities in the subtree by this equation:
+             * (facility_candidates.size() - this->required_facilities) - index_stack.size() : left facilities to place
+             * facility_candidates.size() - current_index - 1 : size of subtree
+             * size of subtree < left facilities to place | *(-1) => invalidate
+             */
+            if (valid && (this->required_facilities + index_stack.size() < current_index + 1)) {
+                valid = false; //too few facilities left
+            }
+
+            //if there is no subtree left, but we still haven't eliminated enough facilities, then we are at the dead brunch
+            //we should pop current valid index and enheap next one instead of it (if any)
+
+            //if we don't have valid top element, then we are at the dead brunch
+            if (!valid) {
+                index_stack.pop();
+                //if we pop - then we increase back the coverage (for current candidate)
+                for (EdgeIterator it = edges[facility_id].begin(); it != edges[facility_id].end(); it++) {
+                    customer_cover[it->first]++;
+                }
+            }
+            //in any case we try to push (independently if we are valid or invalid)
+            if (current_index < facility_candidates.size() - 1) { //there is room for increasing
+
+                //if we have valid top element, but it is not an answer yet, then we start traversing subtree
+                //we initialize traversing by putting next index to the stack
+                //at the same time we do it only if there is any subtree
+
+                index_stack.push(current_index + 1);
+            }
+        }
+
+        this->result = facility_candidates;
+        //our solution is in the stack
+        //stack contains facilities that should be DELETED
+        //if stack is empty, then nothing can be deleted
+        if (index_stack.size() == 0) return true;
+
+        while (index_stack.size() > 0) {
+            //delete every result
+            long index_to_delete = index_stack.top();
+            this->result.erase(this->result.begin() + index_to_delete);
+            index_stack.pop();
+        }
+        return true;
     }
 
     /*
@@ -198,11 +300,11 @@ public:
 
         //logging outside function because of multiple returns inside
         logger->start2("greedy set cover time");
-        bool result = greedySetCover(matchings);
+        bool if_result = greedySetCover(matchings);
         logger->finish2("greedy set cover time");
         logger->finish2("set cover check time");
 
-        return result;
+        return if_result;
     }
 
     void locateFacilities() {

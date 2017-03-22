@@ -7,7 +7,6 @@
 #define BOOST_TEST_MODULE simple_tests
 #include <boost/test/included/unit_test.hpp>
 #include "RoadNetwork.h"
-#include "Bipartite.h"
 #include "TargetEdgeGenerator.h"
 #include "Matcher.h"
 #include "Network.h"
@@ -115,26 +114,6 @@ BOOST_AUTO_TEST_CASE (distanceTest) {
     r.make_weights();
     igraph_real_t dist = EAN(&r.graph, "weight", 0);
     BOOST_CHECK_CLOSE_FRACTION(dist, 9025, 1);
-}
-
-BOOST_AUTO_TEST_CASE (bipartiteGraphMatching) {
-    Bipartite bi;
-    long bignumber = 10;
-    bi.generate_full_bipartite(bignumber,bignumber);
-    bi.generate_random_weights();
-    BOOST_CHECK(igraph_ecount(&bi.bigraph) == bignumber*bignumber);
-    for (uint64_t i = 0; i < bignumber*(bignumber-1)/2; i++) {
-        igraph_integer_t from;
-        igraph_integer_t to;
-        igraph_real_t weight = EAN(&bi.bigraph, "weight", i);
-        igraph_edge(&bi.bigraph, i, &from, &to);
-        BOOST_CHECK((weight >= 0) && (weight <= 1));
-        BOOST_CHECK(VECTOR(bi.types)[from] != VECTOR(bi.types)[to]);
-    }
-    igraph_real_t result_weight;
-    igraph_vector_long_t result_matching;
-    igraph_vector_long_init(&result_matching, 0);
-    bi.igraph_max_matching(&result_weight, &result_matching); //check for runtime errors
 }
 
 BOOST_AUTO_TEST_CASE (tergetgenerator) {

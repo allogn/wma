@@ -3,6 +3,9 @@ project(fcla)
 set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options")
 
+#following for compiling osmtontw binary
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options -lprotobuf-lite -losmpbf -lz")
+
 include_directories(${CMAKE_SOURCE_DIR}/include/)
 
 # BOOST libraries
@@ -50,5 +53,8 @@ target_link_libraries(fcla_tests ${Boost_LIBRARIES};)
 
 add_executable(simple_tests tests/simple_tests.cpp)
 target_link_libraries(simple_tests ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
+
+add_executable(osmtontw osmtontw.cpp)
+target_link_libraries(osmtontw ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

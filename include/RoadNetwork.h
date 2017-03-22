@@ -11,6 +11,7 @@
 #include <igraph/igraph.h>
 #include "osmpbfreader.h"
 #include "Visitor.h"
+#include "Network.h"
 
 #define PI 3.14159265
 
@@ -20,6 +21,7 @@ class RoadNetwork {
 public:
 
     igraph_t graph;
+    std::vector<long> weights;
     Visitor* v;
 
     RoadNetwork() {
@@ -86,10 +88,10 @@ public:
     void make_weights() {
         if (!igraph_cattribute_has_attr(&graph, IGRAPH_ATTRIBUTE_VERTEX, "X") ||
                     !igraph_cattribute_has_attr(&graph, IGRAPH_ATTRIBUTE_VERTEX, "Y")) {
-            throw std::string("Initialize Euclidean coordinates first by transform_coordinates()");
+            throw "Initialize Euclidean coordinates first by transform_coordinates()";
         }
-        igraph_vector_t weights;
-        igraph_vector_init(&weights, igraph_ecount(&graph));
+        weights.clear();
+        weights.resize(igraph_ecount(&graph));
 
         for(uint64_t i = 0; i < igraph_ecount(&graph); i++) {
             igraph_integer_t from;
@@ -102,14 +104,23 @@ public:
             igraph_real_t y2 = igraph_cattribute_VAN(&graph, "Y", to);
             igraph_real_t res = sqrt(pow(x2-x1, 2) + pow(y2-y1, 2));
 
-            igraph_vector_set(&weights, i, res);
+            weights[i] = res;
         }
-
-        igraph_cattribute_EAN_setv(&graph, "weight", &weights);
     }
 
-    bool test_testing() {
-        return false;
+    void save_network(std::string outdir, long source_num) {
+        std::vector<long> weights;
+        std::vector<long> indexes;
+
+        std::vector<long> source_index(igraph_vcount(&graph));
+        for (long i = 0; i < source_index.size(); i++) {
+            source_index[i] = i;
+        }
+        std::random_shuffle(source_index.begin(),source_index.end());
+        source_index.resize(source_num);
+
+        Network net(&this->graph, this->weights, source_index);
+        net.save(outdir);
     }
 };
 
