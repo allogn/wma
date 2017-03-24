@@ -2,7 +2,7 @@
 * 5 levels of debug is supported
 * 0 : no any checking or stats at all
 * 1 : input feasibility check and basic stats
-* 2 : advanced stats included
+* 2 : advanced stats included (nested)
 * 3 : debug info included
 * 4 : everything else included
 */
@@ -35,6 +35,7 @@ public:
     long facility_capacity;
     std::vector<long> source_indexes;
     State state = UNINITIALIZED;
+    std::vector<bool> covered;
 
     /*
      * lambda is a parameter that states when to terminate the heap exploration
@@ -59,7 +60,6 @@ public:
         this->source_indexes = network.source_indexes;
         this->facility_capacity = facility_capacity;
         this->logger = logger;
-
 
         logger->add("number of facilities", facilities_to_locate);
         logger->add("capacity of facilities", facility_capacity);
@@ -90,6 +90,8 @@ public:
                                                                      network.source_indexes);
         graph_size = edge_generator->n + edge_generator->m;
         source_count = edge_generator->n;
+        this->covered.clear();
+        this->covered.resize(source_count, false);
 
         //for Matching Algorithm (base class)
         logger->add2("bipartite graph size", graph_size);
@@ -113,9 +115,14 @@ public:
     bool greedySetCover(std::vector<std::forward_list<long>>& matchings) {
         //note that matching for target with vid=VID in the matching graph
         //will have VID-source_count index in matchings array because that one contains matchings only for targets
-        std::vector<bool> covered(this->source_count, false);
+        std::fill(covered.begin(), covered.end(), false);
         long total_covered = 0;
+
+        //logging variables
+        long heap_iterations = 0;
+
         while (heap.size() > 0) {
+            heap_iterations++;
             long id, init_matching_count;
             heap.dequeue(id, init_matching_count);
             long only_target_id = id - this->source_count; //id in matchings, #of target node without source nodes
@@ -127,8 +134,10 @@ public:
             auto it = matchings[only_target_id].begin();
             auto prev_it = matchings[only_target_id].begin();
             //test if matching is not empty. If so - return false immediately
-            if (it == matchings[only_target_id].end())
+            if (it == matchings[only_target_id].end()) {
+                logger->add2("greedy deheap iterations", heap_iterations);
                 return false;
+            }
             it++;
             while (it != matchings[only_target_id].end()) {
                 long pair_id = (*it);
@@ -149,13 +158,20 @@ public:
             } else {
                 matching_count++;
             }
+
             //if the size was changed - enheap back
             if (matching_count != init_matching_count) {
+                //not guaranteed to have a non-decreasing matching count
                 heap.enqueue(id, matching_count);
             } else {
+                double relative_gain = (double) matching_count / (double) (source_count - total_covered);
+                logger->add2("relative gain", relative_gain);
+                logger->add2("matching count", matching_count);
+                logger->add2("left count", source_count - total_covered);
                 // otherwise add to the result and update coverage
                 result.push_back(only_target_id);
                 if (result.size() > this->required_facilities) {
+                    logger->add2("greedy deheap iterations", heap_iterations);
                     return false;
                 }
                 for (auto it = matchings[only_target_id].begin(); it != matchings[only_target_id].end(); it++) {
@@ -164,6 +180,7 @@ public:
                     total_covered++;
                 }
                 if (total_covered == source_count) {
+                    logger->add2("greedy deheap iterations", heap_iterations);
                     return true;
                 }
             }
@@ -330,7 +347,7 @@ public:
             //increase capacities of everyone
             logger->start2("increase capacity time");
             for (long vid = 0; vid < source_count; vid++) {
-                this->increaseCapacity(vid);
+                if (!covered[vid]) this->increaseCapacity(vid);
             }
             logger->finish2("increase capacity time");
         }

@@ -132,6 +132,8 @@ BOOST_AUTO_TEST_CASE (testSetCovers) {
      * 4 - 5,6,8
      */
     FacilityChooser fcla;
+    Logger logger;
+    fcla.logger = &logger;
     fcla.edge_generator = new RandomEdgeGenerator(1,0,1,1); //dump value for fcla destructor
     fcla.source_count = 5;
     fcla.required_facilities = 5;
