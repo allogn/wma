@@ -3,6 +3,8 @@
 #ifndef FCLA_LOGGER_H
 #define FCLA_LOGGER_H
 
+#define _DEBUG_ 1
+
 #include <iostream>
 #include <map>
 #include <string>

@@ -2,10 +2,6 @@
  * Facility matching main file
  */
 
-#ifndef _DEBUG_
-#define _DEBUG_ 10
-#endif
-
 #include <iostream>
 #include <fstream>
 #include <boost/program_options.hpp>
