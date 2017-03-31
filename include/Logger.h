@@ -164,7 +164,12 @@ public:
         }
         for (auto it = float_dict.begin(); it != float_dict.end(); it++) {
             if (it->second.size() == 1) {
-                outf << "\"" << it->first << "\":" << it->second[0] << ",\n";
+		long res = it->second[0];
+		if ((double) res == it->second[0]) {
+                	outf << "\"" << it->first << "\":" << res << ",\n";
+		} else {
+                	outf << "\"" << it->first << "\":" << it->second[0] << ",\n";
+		}
             } else {
                 outf << "\"" << it->first << "\":[";
                 for (long i = 0; i < it->second.size()-1; i++) {

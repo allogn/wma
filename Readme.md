@@ -15,6 +15,7 @@ Data formats:
 Experiment setup:
 
 - set up environmental variables FCLA_ROOT and DATA_PATH
+- when running cmake, specify debug level by -D DEBUG=0..5, where 1 is basic checks, 2 is stats
 - set up gurobi environmental variables to point to installation dir, note that bash script can not export variable
 - generate data by script in experiments/<type of data> folder
 - create run.py script in experiments folder (<type of data>/<algorithm>/run.py)

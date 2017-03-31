@@ -27,7 +27,7 @@ def load_results(solution_dir, data_dir):
 
 	    results = pd.merge(all_solutions, all_info, on="id")
 	    return results
-    except:
-        print("error in ",tmp_path)
+    except Exception as e:
+        print("error in ",tmp_path,e)
         print(open(tmp_path,"r").read())
         print("Probably you forgot to run getGraphInfo.py") 
