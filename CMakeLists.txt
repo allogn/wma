@@ -51,6 +51,9 @@ target_link_libraries(SIA_tests ${Boost_LIBRARIES};)
 add_executable(fcla_tests tests/fcla_tests.cpp)
 target_link_libraries(fcla_tests ${Boost_LIBRARIES};)
 
+add_executable(infinite tests/infinite_tests.cpp)
+target_link_libraries(infinite ${Boost_LIBRARIES};)
+
 add_executable(simple_tests tests/simple_tests.cpp)
 target_link_libraries(simple_tests ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
 

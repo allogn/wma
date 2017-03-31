@@ -181,4 +181,16 @@ BOOST_AUTO_TEST_CASE (testSetCovers) {
     BOOST_CHECK(!fcla.treeCover(faccand10));
     BOOST_CHECK(!fcla.treeCover(faccand11));
     BOOST_CHECK(!fcla.treeCover(faccand12));
+    
+    fcla.required_facilities = 1;
+    BOOST_CHECK(fcla.treeCover(faccand1));
+    BOOST_CHECK(!fcla.treeCover(faccand2));
+    BOOST_CHECK(!fcla.treeCover(faccand3));
+    BOOST_CHECK(!fcla.treeCover(faccand4));
+    BOOST_CHECK(!fcla.treeCover(faccand5));
+    BOOST_CHECK(!fcla.treeCover(faccand6));
+
+    fcla.required_facilities = 2;
+    BOOST_CHECK(fcla.treeCover(faccand2));
+    BOOST_CHECK(!fcla.treeCover(faccand9));
 }

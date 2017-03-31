@@ -40,9 +40,8 @@ public:
         igraph_destroy(&this->graph);
     }
 
-    void save(std::string dir) {
-        std::string filename = dir + '/' + this->id + ".ntw";
-        std::ofstream outf(filename,std::ios::app);
+    void save(std::string dir, std::string filename) {
+        std::ofstream outf(filename,std::ios::out);
         outf << this->id << " "
              << igraph_vcount(&graph) << " "
              << igraph_ecount(&graph) << " "
@@ -56,6 +55,11 @@ public:
             outf << source_indexes[i] << "\n";
         }
         outf.close();
+    }
+
+    void save(std::string dir) {
+        std::string filename = dir + '/' + this->id + ".ntw";
+        this->save(dir, filename);
     }
 
     void load(std::string filename) {
