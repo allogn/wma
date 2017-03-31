@@ -268,13 +268,14 @@ public:
      * And in a tree traversal way try to exclude up to F'-F facilities until a valid set is found
      */
     bool treeCover(std::vector<long>& facility_candidates) {
+        //note that facility candidates  Is a result vector that holds indices in a network but not this bipartite graph
         std::vector<long> customer_cover(this->source_count,0);
         //get a set of top-lambda facilities, each represents a set of covered customers
         //populare cover vector with all candidates
         for (long i = 0; i < facility_candidates.size(); i++) {
-            long facility_id = facility_candidates[i];
+            long facility_vid = facility_candidates[i] + this->source_count;
             //iterate through all customers covered by this facility
-            for (EdgeIterator it = edges[facility_id].begin(); it != edges[facility_id].end(); it++) {
+            for (EdgeIterator it = edges[facility_vid].begin(); it != edges[facility_vid].end(); it++) {
                 customer_cover[it->first]++;
             }
         }
@@ -292,11 +293,11 @@ public:
 
         while (index_stack.size() > 0) {
             long current_index = index_stack.top();
-            long facility_id = facility_candidates[current_index];
+            long facility_vid = facility_candidates[current_index] + this->source_count;
             bool valid = true;
 
             //substract covered customers from coverage vector
-            for (EdgeIterator it = edges[facility_id].begin(); it != edges[facility_id].end(); it++) {
+            for (EdgeIterator it = edges[facility_vid].begin(); it != edges[facility_vid].end(); it++) {
                 customer_cover[it->first]--;
                 //if any of touched customers is now zero : invalidate current index by removing it from stack
                 if (customer_cover[it->first] == 0) {
@@ -334,7 +335,7 @@ public:
             if (!valid) {
                 index_stack.pop();
                 //if we pop - then we increase back the coverage (for current candidate)
-                for (EdgeIterator it = edges[facility_id].begin(); it != edges[facility_id].end(); it++) {
+                for (EdgeIterator it = edges[facility_vid].begin(); it != edges[facility_vid].end(); it++) {
                     customer_cover[it->first]++;
                 }
             }
