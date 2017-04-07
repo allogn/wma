@@ -37,6 +37,8 @@ public:
     std::vector<long> source_indexes;
     State state = UNINITIALIZED;
     std::vector<bool> covered;
+    std::vector<long> customer_antirank;
+    double alpha;
 
     /*
      * lambda is a parameter that states when to terminate the heap exploration
@@ -55,12 +57,14 @@ public:
                     long facilities_to_locate,
                     long facility_capacity,
                     Logger* logger,
-                    long lambda = 0) {
+                    long lambda = 0,
+                    double alpha = 1) {
         logger->start2("fcla initialization");
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
         this->facility_capacity = facility_capacity;
         this->logger = logger;
+        this->alpha = alpha;
 
         logger->add("number of facilities", facilities_to_locate);
         logger->add("capacity of facilities", facility_capacity);
@@ -93,6 +97,8 @@ public:
         source_count = edge_generator->n;
         this->covered.clear();
         this->covered.resize(source_count, false);
+        this->customer_antirank.clear();
+        this->customer_antirank.resize(source_count);
 
         //for Matching Algorithm (base class)
         logger->add2("bipartite graph size", graph_size);
@@ -116,10 +122,11 @@ public:
     bool greedySetCover(std::forward_list<long>* matchings) {
         //note that matching for target with vid=VID in the matching graph
         //will have VID-source_count index in matchings array because that one contains matchings only for targets
-        std::vector<bool> covered(this->source_count, false);
+//        std::vector<bool> covered(this->source_count, false);
         //two separate variables needed because of lambda and treesetcover: if lambda > 0, then use the last snapshot of
         //covered vector that used feasible amount of facilities
-        this->covered = covered;
+//        this->covered = covered;
+        std::fill(covered.begin(), covered.end(), false);
         long total_covered = 0;
 
         //logging variables
@@ -177,9 +184,9 @@ public:
                 result.push_back(only_target_id);
 
                 //save vector for capacity increment for later
-                if (result.size() == this->required_facilities) {
-                    this->covered = covered;
-                }
+//                if (result.size() == this->required_facilities) {
+//                    this->covered = covered;
+//                }
 
                 if (result.size() > this->required_facilities + lambda) {
                     logger->add2("greedy deheap iterations", heap_iterations);
@@ -218,7 +225,6 @@ public:
     bool greedySetCoverNoHeap() {
         //note that matching for target with vid=VID in the matching graph
         //will have VID-source_count index in matchings array because that one contains matchings only for targets
-        std::fill(covered.begin(), covered.end(), false);
         long total_covered = 0;
         while (result.size() <= this->required_facilities) {
             long best_fac_id = 0;
@@ -301,6 +307,7 @@ public:
                 customer_cover[it->first]--;
                 //if any of touched customers is now zero : invalidate current index by removing it from stack
                 if (customer_cover[it->first] == 0) {
+                    customer_antirank[it->first]++;
                     valid = false;
                     //do not break here because we need to increase back coverage later
                 }
@@ -399,6 +406,9 @@ public:
         }
         //now run greedy algorithm, that chooses the best subset from a heap
 
+        //should be ere in case treecover is not called. we should have zero antirank anyway
+        std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
+        std::fill(covered.begin(), covered.end(), false);
         //logging outside function because of multiple returns inside
         logger->start2("greedy set cover time");
         bool if_result = greedySetCover(matchings);
@@ -438,8 +448,29 @@ public:
             capacity_iteration++;
             //increase capacities of everyone
             logger->start2("increase capacity time");
+            //calculate capacity increase vector based on covered and antirank
+            //summarize covered and antirank vector. if covered is not full then antirank is zero. otherwise covered is one anywhere
+            //so they do not interfere
+            std::vector<long> speed(source_count);
+            long max = 0;
+            for (long i = 0; i < source_count; i++) {
+                speed[i] = (!this->covered[i]) + this->customer_antirank[i];
+                max = std::max(speed[i], max);
+            }
+            if (max == 0) {
+                for (long i = 0; i < speed.size(); i++) {
+                    speed[i] = 1;
+                }
+            } else {
+                for (long i = 0; i < speed.size(); i++) {
+                    speed[i] = (long)(this->alpha * (double)speed[i]/(double)max);
+                }
+            }
+
             for (long vid = 0; vid < source_count; vid++) {
-                if (!covered[vid]) this->increaseCapacity(vid);
+                for (long j = 0; j < speed[vid]; j++) {
+                    this->increaseCapacity(vid);
+                }
 //                this->increaseCapacity(vid);
             }
             logger->finish2("increase capacity time");

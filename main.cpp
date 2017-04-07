@@ -21,6 +21,7 @@ int main(int argc, const char** argv) {
     long facility_capacity;
     long lambda;
     int debug;
+    double alpha;
     string out_filename;
 
     po::options_description desc("Allowed options");
@@ -29,7 +30,8 @@ int main(int argc, const char** argv) {
             ("input,i", po::value<string>(&filename)->required(), "Input file, a network")
             ("facilities,n", po::value<long>(&facilities_to_locate)->required(), "Facilities to locate")
             ("faccap,c", po::value<long>(&facility_capacity)->default_value(1), "Capacity of facilities")
-            ("lambda,l", po::value<long>(&lambda)->default_value(0), "Parameter lambda, top-k facility heap threshold")
+            ("lambda,l", po::value<long>(&lambda)->default_value(0), "Parameter lambda, set cover oversize")
+            ("alpha,a", po::value<double>(&alpha)->default_value(1), "Parameter alpha, exploring pace")
             ("output,o", po::value<string>(&out_filename)->required(), "Output file");
 
     po::variables_map vm;
@@ -46,7 +48,7 @@ int main(int argc, const char** argv) {
     Network net(filename);
     logger.finish2("reading file");
 
-    FacilityChooser fcla(net, facilities_to_locate, facility_capacity, &logger, lambda);
+    FacilityChooser fcla(net, facilities_to_locate, facility_capacity, &logger, lambda, alpha);
     fcla.locateFacilities();
     fcla.calculateResult();
     switch(fcla.state) {

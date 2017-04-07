@@ -30,6 +30,7 @@ public:
     typedef typename Adjlist::iterator EdgeIterator;
     std::vector<Adjlist> edges;
     std::vector<F> node_excess;
+    std::vector<F> total_matched; //already matched facilities to a customer
     EdgeGenerator* edge_generator;
     Logger* logger;
 
@@ -58,6 +59,9 @@ public:
     }
 
     void reset() {
+        total_matched.clear();
+        total_matched.resize(source_count, 0);
+
         potentials.resize(graph_size, 0);
         edges.resize(graph_size);
         for (I i = 0; i < graph_size; i++) {
@@ -332,6 +336,7 @@ public:
 
         //current node contains the source node after while loop, so we change node_excess
         node_excess[target] -= 1;
+        total_matched[current_node] += 1;
         node_excess[current_node] += 1;
 
         return 1;
@@ -413,6 +418,13 @@ public:
      * Increase the demand of a particular customer
      */
     F increaseCapacity(I vid) {
+        //if current vid is already has demand equal to every possible facility - ignore
+        if (total_matched[vid] >= this->edge_generator->m) {
+            return -1;
+        }
+
+        //only one value per call because only one matchvertexroutine is called, that can change flow value on max 1 value
+        //in bipartite graph
         this->node_excess[vid] -= 1;
         //before capacity was changed, all excesses were zero. Then, one changed
         //As a result of matchVertex routine, no any other vertex can loose its matching
