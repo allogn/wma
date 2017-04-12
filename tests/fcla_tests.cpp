@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE (testExplorator) {
 
 BOOST_AUTO_TEST_CASE (basicFacilityLocation) {
     igraph_t graph;
-    igraph_empty(&graph, 4, false);
+    igraph_empty(&graph, 3, false);
     igraph_vector_t edges;
     igraph_real_t edge_array[6] = {0,1,1,2,0,2};
     igraph_vector_init_copy(&edges, edge_array, 6);
@@ -154,19 +154,19 @@ BOOST_AUTO_TEST_CASE (testSetCovers) {
     fcla.edges[9].push_front(std::make_pair<long,long>(1, 1));
     fcla.edges[9].push_front(std::make_pair<long,long>(3, 1));
     
-    std::vector<long> faccand1({5});
-    std::vector<long> faccand2({9,8});
-    std::vector<long> faccand3({7,6});
-    std::vector<long> faccand4({5,6});
-    std::vector<long> faccand5({9,6});
-    std::vector<long> faccand6({5,6,7,8,9});
+    std::vector<long> faccand1({0});
+    std::vector<long> faccand2({4,3});
+    std::vector<long> faccand3({2,1});
+    std::vector<long> faccand4({0,1});
+    std::vector<long> faccand5({4,1});
+    std::vector<long> faccand6({0,1,2,3,4});
 
     std::vector<long> faccand7({});
-    std::vector<long> faccand8({7});
-    std::vector<long> faccand9({7,8});
-    std::vector<long> faccand10({7,9});
-    std::vector<long> faccand11({9});
-    std::vector<long> faccand12({6});
+    std::vector<long> faccand8({2});
+    std::vector<long> faccand9({2,3});
+    std::vector<long> faccand10({2,4});
+    std::vector<long> faccand11({4});
+    std::vector<long> faccand12({1});
 
     BOOST_CHECK(fcla.treeCover(faccand1));
     BOOST_CHECK(fcla.treeCover(faccand2));
@@ -186,11 +186,65 @@ BOOST_AUTO_TEST_CASE (testSetCovers) {
     BOOST_CHECK(fcla.treeCover(faccand1));
     BOOST_CHECK(!fcla.treeCover(faccand2));
     BOOST_CHECK(!fcla.treeCover(faccand3));
-    BOOST_CHECK(!fcla.treeCover(faccand4));
+    BOOST_CHECK(fcla.treeCover(faccand4));
     BOOST_CHECK(!fcla.treeCover(faccand5));
     BOOST_CHECK(!fcla.treeCover(faccand6));
 
     fcla.required_facilities = 2;
     BOOST_CHECK(fcla.treeCover(faccand2));
     BOOST_CHECK(!fcla.treeCover(faccand9));
+}
+
+/*
+ * test cases for gamma
+ */
+
+BOOST_AUTO_TEST_CASE (test3TrippleGamma1) {
+    igraph_t graph;
+    std::vector<long> edges = {0,1,1,2,3,4,4,2,5,6,6,2};
+    std::vector<long> weights = {1,2,3,4,5,6};
+    std::vector<long> sources = {0,3,5};
+    create_graph(&graph, 7, edges);
+    Network net(&graph, weights, sources);
+    Logger logger;
+    FacilityChooser fcla(net, 2, 2, &logger, 0, 1, 1);
+    fcla.locateFacilities();
+    fcla.calculateResult();
+    BOOST_CHECK_EQUAL(fcla.result.size(), 2);
+    BOOST_CHECK((fcla.result[0] == 2) || (fcla.result[1] == 2));
+    igraph_destroy(&graph);
+}
+
+
+BOOST_AUTO_TEST_CASE (test3TrippleGamma2) {
+    igraph_t graph;
+    std::vector<long> edges = {0,1,1,2,3,4,4,2,5,6,6,2};
+    std::vector<long> weights = {1,2,3,4,5,6};
+    std::vector<long> sources = {0,3,5};
+    create_graph(&graph, 7, edges);
+    Network net(&graph, weights, sources);
+    Logger logger;
+    FacilityChooser fcla(net, 2, 2, &logger, 0, 1, 2);
+    fcla.locateFacilities();
+    fcla.calculateResult();
+    BOOST_CHECK_EQUAL(fcla.result.size(), 2);
+    BOOST_CHECK((fcla.result[0] == 2) || (fcla.result[1] == 2));
+    igraph_destroy(&graph);
+}
+
+
+BOOST_AUTO_TEST_CASE (test3TrippleGamma3) {
+    igraph_t graph;
+    std::vector<long> edges = {0,1,1,2,3,4,4,2,5,6,6,2};
+    std::vector<long> weights = {1,2,3,4,5,6};
+    std::vector<long> sources = {0,3,5};
+    create_graph(&graph, 7, edges);
+    Network net(&graph, weights, sources);
+    Logger logger;
+    FacilityChooser fcla(net, 2, 2, &logger, 0, 1, 3);
+    fcla.locateFacilities();
+    fcla.calculateResult();
+    BOOST_CHECK_EQUAL(fcla.result.size(), 2);
+    BOOST_CHECK((fcla.result[0] == 2) || (fcla.result[1] == 2));
+    igraph_destroy(&graph);
 }

@@ -20,8 +20,8 @@ int main(int argc, const char** argv) {
     long facilities_to_locate;
     long facility_capacity;
     long lambda;
-    int debug;
     double alpha;
+    long gamma;
     string out_filename;
 
     po::options_description desc("Allowed options");
@@ -31,6 +31,7 @@ int main(int argc, const char** argv) {
             ("facilities,n", po::value<long>(&facilities_to_locate)->required(), "Facilities to locate")
             ("faccap,c", po::value<long>(&facility_capacity)->default_value(1), "Capacity of facilities")
             ("lambda,l", po::value<long>(&lambda)->default_value(0), "Parameter lambda, set cover oversize")
+            ("gamma,g", po::value<long>(&gamma)->default_value(0), "Parameter gamma, how many ties to select for set cover")
             ("alpha,a", po::value<double>(&alpha)->default_value(1), "Parameter alpha, exploring pace")
             ("output,o", po::value<string>(&out_filename)->required(), "Output file");
 
@@ -48,7 +49,7 @@ int main(int argc, const char** argv) {
     Network net(filename);
     logger.finish2("reading file");
 
-    FacilityChooser fcla(net, facilities_to_locate, facility_capacity, &logger, lambda, alpha);
+    FacilityChooser fcla(net, facilities_to_locate, facility_capacity, &logger, lambda, alpha, gamma);
     fcla.locateFacilities();
     fcla.calculateResult();
     switch(fcla.state) {
