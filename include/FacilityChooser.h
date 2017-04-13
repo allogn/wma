@@ -395,6 +395,7 @@ public:
 
         //now check if we need brute force
         if (this->facility_capacity - current_coverage >= gamma) {
+            logger->add2("proceedLevelType",0);
             //now run greedy algorithm, that chooses the best subset from a heap for current delta_covered set
             logger->start2("greedy set cover time");
             bool if_result = greedySetCover(matchings, covered, total_covered, heap, result); //result modified inside
@@ -414,6 +415,7 @@ public:
 
             return if_result;
         }
+        logger->add2("proceedLevelType",1);
 
         //deheap all of current level
         long cur_coverage_facility_count = 0;
@@ -423,6 +425,7 @@ public:
             heap.dequeue();
             cur_coverage_facility_count++;
         }
+        logger->add2("current level fac count", cur_coverage_facility_count);
 
         /*
          * the idea of taking "left" amount of facilities is example of remaining only 1 uncovered customer,
@@ -605,16 +608,23 @@ public:
             //should be ere in case treecover is not called. we should have zero antirank anyway
             std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
 
+            logger->start2("brute-force copying");
+            std::vector<std::forward_list<long>> new_matchings = matchings;
+            fHeap<long,long> new_heap = heap;
+            logger->finish2("brute-force copying");
+
             std::vector<long> covered(this->source_count, 0);
             std::vector<long> result;
             long total_covered = 0;
-            if_result = proceedLevel(covered, total_covered, heap, matchings, result); //recursion
+            if_result = proceedLevel(covered, total_covered, new_heap, new_matchings, result); //recursion
 
             //check whether to raise gamma or raise demand
             double gamma_improvement = (double)(total_covered - previous_covered)/(double)source_count;
-            logger->add2("gamma improvement", gamma_improvement);
+            logger->add2("total covered greedy", total_covered);
+            if (previous_covered != 0) logger->add2("gamma improvement", gamma_improvement);
             logger->add2("gamma", this->gamma);
-            if (if_result || total_covered < 0.8 * source_count) { // || gamma_improvement < 0.05) {
+            if (if_result || total_covered < 0.9 * source_count || gamma_improvement == 0) {
+                if (previous_covered != 0) gamma--;
                 break;
             }
             previous_covered = total_covered;
@@ -653,8 +663,10 @@ public:
             //so they do not interfere
             std::vector<long> speed(source_count);
             long max = 0;
+            long total_uncovered = 0;
             for (long i = 0; i < source_count; i++) {
                 speed[i] = this->customer_antirank[i];
+                total_uncovered += (speed[i] == 0);
                 max = std::max(speed[i], max);
             }
             if (max == 0) {
@@ -662,8 +674,9 @@ public:
                     speed[i] = 1;
                 }
             } else {
+                double coef = this->alpha * (double) total_uncovered / (double)source_count;
                 for (long i = 0; i < speed.size(); i++) {
-                    speed[i] = (long)(this->alpha * (double)speed[i]/(double)max);
+                    speed[i] = (long)(coef * (double)speed[i]/(double)max);
                 }
             }
 
