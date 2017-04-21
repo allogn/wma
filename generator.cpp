@@ -100,6 +100,10 @@ int main(int argc, const char** argv) {
             igraph_rng_seed(&rng_y, time(NULL)/2);
             check_connected = false;
             while (!check_connected) {
+                coord_x.clear();
+                coord_y.clear();
+                edges.clear();
+                weights.clear();
                 std::vector<long> prev_center_id;
                 for (long cl = 0; cl < clusters; cl++) {
                     igraph_real_t x_center;
@@ -113,12 +117,11 @@ int main(int argc, const char** argv) {
                 }
 
                 //create graph and add all edges with weights. weights multiply by 1000
-                n = coord_x.size(); //in case +-1 because of division
-                igraph_empty(&graph, n, false);
-                for (long i = 0; i < n; i++) {
-                    for (long j = i+1; j < n; j++) {
+                igraph_empty(&graph, coord_x.size(), false);
+                for (long i = 0; i < coord_x.size(); i++) {
+                    for (long j = i+1; j < coord_x.size(); j++) {
                         double dist = sqrt( pow(coord_x[i] - coord_x[j], 2) + pow(coord_y[i] - coord_y[j], 2));
-                        if (dist < 1./sqrt((double)n)*geom_dens) {
+                        if (dist < 1./sqrt((double)coord_x.size())*geom_dens) {
                             weights.push_back(dist * 1000);
                             edges.push_back(i);
                             edges.push_back(j);
@@ -142,9 +145,12 @@ int main(int argc, const char** argv) {
 //                for (long i = 0; i < coord_x.size(); i++) {
 //                    cout << coord_x[i] << "," << coord_y[i] << endl;
 //                }
-                n = coord_x.size();
-                create_graph(&graph, n, edges);
+                create_graph(&graph, coord_x.size(), edges);
                 igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
+                if (!check_connected) {
+                    cout << "Not connected, try another time" << endl;
+                    igraph_destroy(&graph);
+                }
             }
             break;
         default:
