@@ -384,13 +384,17 @@ public:
         //we can check strong feasibility right here
         //coverage is not feasible if marginal gain for remaining facilities is not enough
         //this includes the extreme case when no available facilities left
-        if (current_coverage*(this->required_facilities - result.size()) < (this->source_count - total_covered)) {
-            return false;
-        }
+//        if (current_coverage*(this->required_facilities - result.size()) < (this->source_count - total_covered)) {
+//            return false;
+//        }
 
         if (source_count == total_covered) {
             this->result = result;
             return true;
+        }
+
+        if (this->required_facilities - result.size() == 0) {
+            return false;
         }
 
         //now check if we need brute force
@@ -480,6 +484,7 @@ public:
             }
 
             //for each B else in the set
+            logger->start2("building independent set");
             std::forward_list<long>::iterator fac_it = current_level_facilities.begin();
             std::forward_list<long>::iterator prev_fac_it = fac_it;
             while (fac_it != current_level_facilities.end()) {
@@ -551,6 +556,7 @@ public:
                 prev_fac_it = fac_it;
                 if (current_level_facilities.begin() != current_level_facilities.end()) fac_it++;
             }
+            logger->finish2("building independent set");
             long new_total_covered = total_covered + delta_total_covered;
             bool if_result = proceedLevel(new_covered, new_total_covered, new_heap,
                                           new_matchings, new_result);
@@ -604,32 +610,38 @@ public:
         bool if_result = false;
         long previous_covered = 0;
 //        gamma = 1;
-        while (!if_result) {
-            //should be ere in case treecover is not called. we should have zero antirank anyway
-            std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
+//        while (!if_result) {
+//            //should be ere in case treecover is not called. we should have zero antirank anyway
+//            std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
+//
+//            logger->start2("brute-force copying");
+//            std::vector<std::forward_list<long>> new_matchings = matchings;
+//            fHeap<long,long> new_heap = heap;
+//            logger->finish2("brute-force copying");
+//
+//            std::vector<long> covered(this->source_count, 0);
+//            std::vector<long> result;
+//            long total_covered = 0;
+//            if_result = proceedLevel(covered, total_covered, new_heap, new_matchings, result); //recursion
+//
+//            //check whether to raise gamma or raise demand
+//            double gamma_improvement = (double)(total_covered - previous_covered)/(double)source_count;
+//            logger->add2("total covered greedy", total_covered);
+//            if (previous_covered != 0) logger->add2("gamma improvement", gamma_improvement);
+//            logger->add2("gamma", this->gamma);
+//            if (if_result || total_covered < 0.9 * source_count || gamma_improvement == 0) {
+//                if (previous_covered != 0) gamma--;
+//                break;
+//            }
+//            previous_covered = total_covered;
+//            gamma++;
+//        }
 
-            logger->start2("brute-force copying");
-            std::vector<std::forward_list<long>> new_matchings = matchings;
-            fHeap<long,long> new_heap = heap;
-            logger->finish2("brute-force copying");
-
-            std::vector<long> covered(this->source_count, 0);
-            std::vector<long> result;
-            long total_covered = 0;
-            if_result = proceedLevel(covered, total_covered, new_heap, new_matchings, result); //recursion
-
-            //check whether to raise gamma or raise demand
-            double gamma_improvement = (double)(total_covered - previous_covered)/(double)source_count;
-            logger->add2("total covered greedy", total_covered);
-            if (previous_covered != 0) logger->add2("gamma improvement", gamma_improvement);
-            logger->add2("gamma", this->gamma);
-            if (if_result || total_covered < 0.9 * source_count || gamma_improvement == 0) {
-                if (previous_covered != 0) gamma--;
-                break;
-            }
-            previous_covered = total_covered;
-            gamma++;
-        }
+        std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
+        long total_covered = 0;
+        std::vector<long> covered(this->source_count, 0);
+        if_result = proceedLevel(covered, total_covered, heap, matchings, result);
+        logger->add2("total covered final", total_covered);
 
         //return findSetCover result, with antirank updated as a global variable
         logger->finish2("set cover check time");
@@ -666,7 +678,7 @@ public:
             long total_uncovered = 0;
             for (long i = 0; i < source_count; i++) {
                 speed[i] = this->customer_antirank[i];
-                total_uncovered += (speed[i] == 0);
+                total_uncovered += (speed[i] == 0);//total covered
                 max = std::max(speed[i], max);
             }
             if (max == 0) {
@@ -674,14 +686,14 @@ public:
                     speed[i] = 1;
                 }
             } else {
-                double coef = this->alpha * (double) total_uncovered / (double)source_count;
+                double coef = 1 + this->alpha * (double) total_uncovered / (double)source_count;
                 for (long i = 0; i < speed.size(); i++) {
                     speed[i] = (long)(coef * (double)speed[i]/(double)max);
                 }
             }
 
             for (long vid = 0; vid < source_count; vid++) {
-                for (long j = 0; j < speed[vid]; j++) {
+                for (long j = 0; j < speed[vid]; j++) { 
                     this->increaseCapacity(vid);
                 }
 //                this->increaseCapacity(vid);
