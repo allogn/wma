@@ -5,6 +5,8 @@ Dependences:
 - libigraph*
 - gurobi python solver + gurobi itself
 
+For osmtoontw remove comment in CMakeLists to link libraries.
+
 Data formats:
 
 - Results of optimization scripts are saved in json format to a file (one file per experiment)
