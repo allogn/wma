@@ -148,7 +148,6 @@ int main(int argc, const char** argv) {
                 create_graph(&graph, coord_x.size(), edges);
                 igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
                 if (!check_connected) {
-                    cout << "Not connected, try another time" << endl;
                     igraph_destroy(&graph);
                 }
             }
