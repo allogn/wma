@@ -145,7 +145,6 @@ int main(int argc, const char** argv) {
                 n = coord_x.size();
                 create_graph(&graph, n, edges);
                 igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
-                exit(1);
             }
             break;
         default:
