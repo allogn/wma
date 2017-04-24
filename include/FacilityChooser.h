@@ -425,6 +425,9 @@ public:
         }
 
         if (this->required_facilities - result.size() == 0) {
+            for (long i = 0; i < source_count; i++) {
+                this->customer_antirank[i] += (covered[i] == 0);
+            }
             return false;
         }
 
@@ -517,6 +520,11 @@ public:
                 return true;
             }
 
+            //if we are not done, then it is impossible for this set
+            if (this->required_facilities - new_result.size() == 0) {
+                continue;
+            }
+
             //for each B else in the set
             logger->start2("building independent set");
             std::forward_list<long>::iterator fac_it = current_level_facilities.begin();
@@ -572,6 +580,11 @@ public:
                         //we are done by adding independent facilities at this level
                         this->result = new_result;
                         return true;
+                    }
+
+                    //if we are not done but out of facilities, then go to greedy in order to update antirank
+                    if (this->required_facilities - new_result.size() == 0) {
+                        break;
                     }
 
                     /*
