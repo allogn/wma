@@ -21,6 +21,7 @@
 // _define_ var inherited here
 #include "Logger.h"
 #include "helpers.h"
+#include "FacilityRank.h"
 
 class FacilityChooser : public Matcher<long,long,long> {
 public:
@@ -144,7 +145,7 @@ public:
     //note that vector should be copied each time because it is modified internally, but we don't use them in brute force anymore if greedy is called
     //so they are copied implicitly in brute force (each brute force has local version)
     bool greedySetCover(std::vector<std::forward_list<long>>& matchings, std::vector<long>& local_covered,
-                        long& total_covered, fHeap<long,long>& heap, std::vector<long>& result) {
+                        long& total_covered, fHeap<FacilityRank,long>& heap, std::vector<long>& result) {
         //note that matching for target with vid=VID in the matching graph
         //will have VID-source_count index in matchings array because that one contains matchings only for targets
 
@@ -153,12 +154,11 @@ public:
 
         while (heap.size() > 0) {
             heap_iterations++;
-            long id, init_matching_count;
-            heap.dequeue(id, init_matching_count);
+            long id;
+            FacilityRank rank(-1,-1);
+            heap.dequeue(id, rank);
+            long init_matching_count = rank.coverage;
             long only_target_id = id - this->source_count; //id in matchings, #of target node without source nodes
-
-            //update usage history here
-            this->last_used[only_target_id] = this->capacity_iteration;
 
             long matching_count = 0;
             // check which matched vertex is still not covered and delete covered ones
@@ -193,10 +193,11 @@ public:
                 matching_count++;
             }
 
-            //if the size was changed - enheap back
+            //if the size was changed- enheap back
             if (matching_count != init_matching_count) {
                 //not guaranteed to have a non-decreasing matching count
-                heap.enqueue(id, matching_count);
+                rank.coverage = matching_count;
+                heap.enqueue(id, rank);
             } else {
 
                 double relative_gain = (double) matching_count / (double) (source_count - total_covered);
@@ -210,6 +211,8 @@ public:
                     logger->add2("greedy deheap iterations", heap_iterations);
                     return false;
                 }
+                //update usage history here
+                this->last_used[only_target_id] = this->capacity_iteration;
 
                 //relative gain threshold
 //                if (((result.size() > this->required_facilities) && ((double)(source_count - total_covered)/(double)source_count > 0.1)) ||
@@ -402,12 +405,12 @@ public:
      */
     //heap passed by reference because a copy is created inside while loop (to reuse initial state for each facility set)
     //matchings the same
-    bool proceedLevel(std::vector<long>& covered, long& total_covered, fHeap<long,long>& heap,
+    bool proceedLevel(std::vector<long>& covered, long& total_covered, fHeap<FacilityRank,long>& heap,
                       std::vector<std::forward_list<long>>& matchings, std::vector<long>& result) {
         if (heap.size() == 0) {
             return false; //out of available facilities for some reason (probably border case)
         }
-        long current_coverage = heap.getTopValue();
+        long current_coverage = heap.getTopValue().coverage;
 
         //we can check strong feasibility right here
         //coverage is not feasible if marginal gain for remaining facilities is not enough
@@ -452,7 +455,7 @@ public:
         //deheap all of current level
         long cur_coverage_facility_count = 0;
         std::forward_list<long> current_level_facilities;
-        while (heap.size() > 0 && heap.getTopValue() == current_coverage) {
+        while (heap.size() > 0 && heap.getTopValue().coverage == current_coverage) {
             current_level_facilities.push_front(heap.getTopIdx());
             heap.dequeue();
             cur_coverage_facility_count++;
@@ -492,14 +495,14 @@ public:
             }
             //if delta_total_covered is not equal to promised current_coverage (fall short of expectations), then enheap and continue
             if (delta_total_covered != current_coverage) {
-                heap.enqueue(facility_id + source_count, delta_total_covered);
+                heap.enqueue(facility_id + source_count, FacilityRank(delta_total_covered,this->last_used[facility_id]));
                 continue;
             }
 
             //otherwise add to result and start building independent set
             //initialize new variables
             logger->start2("brute-force copying");
-            fHeap<long,long> new_heap = heap;
+            fHeap<FacilityRank,long> new_heap = heap;
             std::vector<std::forward_list<long>> new_matchings = matchings;
             std::vector<long> new_result = result;
             logger->finish2("brute-force copying");
@@ -520,9 +523,6 @@ public:
             std::forward_list<long>::iterator prev_fac_it = fac_it;
             while (fac_it != current_level_facilities.end()) {
                 long another_facility_id = *fac_it - source_count;
-
-                //update usage vector
-                this->last_used[facility_id] = this->capacity_iteration;
 
                 //if A influenced B then enheap back
                 long new_coverage = 0;
@@ -554,8 +554,9 @@ public:
                         new_matchings[another_facility_id].pop_front();
                     }
 
-                    new_heap.enqueue(another_facility_id + source_count, new_coverage);
+                    new_heap.enqueue(another_facility_id + source_count, FacilityRank(new_coverage,this->last_used[facility_id]));
                 } else {
+
                     //else remove B from the set of current level (do not consider it), and add one more facility to current delta_coverage
                     for (std::forward_list<long>::iterator it = new_matchings[another_facility_id].begin();
                          it != new_matchings[another_facility_id].end(); it++) {
@@ -564,6 +565,8 @@ public:
                     new_matchings[another_facility_id].clear();
                     delta_total_covered += new_coverage;
                     new_result.push_back(another_facility_id);
+                    //update usage vector only if we utilize facility, not when we consider and reenheap (another if clause)
+                    this->last_used[facility_id] = this->capacity_iteration;
 
                     if (total_covered+delta_total_covered == source_count) {
                         //we are done by adding independent facilities at this level
@@ -612,7 +615,7 @@ public:
         logger->start2("set cover check time");
         //initialize single linked lists and heaps
         result.clear();
-        fHeap<long,long> heap; //one makes heap to have max first
+        fHeap<FacilityRank,long> heap; //one makes heap to have max first
         heap.sign = 1; //make heap decreasing
 
         std::vector<std::forward_list<long>> matchings(graph_size - source_count);
@@ -630,7 +633,7 @@ public:
             }
             //put in a heap
             if (matching_count >= 0) {
-                heap.enqueue(i, matching_count);
+                heap.enqueue(i, FacilityRank(matching_count,this->last_used[i-source_count]));
             }
             matchings[i - source_count] = linked_nodes;
         }
