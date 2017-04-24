@@ -429,7 +429,11 @@ public:
         //before capacity was changed, all excesses were zero. Then, one changed
         //As a result of matchVertex routine, no any other vertex can loose its matching
         //because any path is "continuous"
-        return matchVertex(vid);
+        int result = matchVertex(vid);
+        if (result == 0) {
+            this->node_excess[vid] += 1; //do not match this node ever
+        }
+        return result;
     }
 
     void calculateResult() { //@todo remove result matching from everywhere

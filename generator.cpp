@@ -99,7 +99,8 @@ int main(int argc, const char** argv) {
             igraph_rng_init(&rng_y, &igraph_rngtype_mt19937);
             igraph_rng_seed(&rng_y, time(NULL)/2);
             check_connected = false;
-            while (!check_connected) {
+//            while (!check_connected) {
+            {
                 coord_x.clear();
                 coord_y.clear();
                 edges.clear();
@@ -110,7 +111,7 @@ int main(int argc, const char** argv) {
                     igraph_real_t y_center;
                     x_center = igraph_rng_get_unif01(&rng_x);
                     y_center = igraph_rng_get_unif01(&rng_y);
-                    create_cluster(coord_x, coord_y, n/clusters, 1./clusters, x_center, y_center);
+                    create_cluster(coord_x, coord_y, n / clusters, 1. / clusters, x_center, y_center);
                     prev_center_id.push_back(coord_x.size());
                     coord_x.push_back(x_center);
                     coord_y.push_back(y_center);
@@ -119,9 +120,9 @@ int main(int argc, const char** argv) {
                 //create graph and add all edges with weights. weights multiply by 1000
                 igraph_empty(&graph, coord_x.size(), false);
                 for (long i = 0; i < coord_x.size(); i++) {
-                    for (long j = i+1; j < coord_x.size(); j++) {
-                        double dist = sqrt( pow(coord_x[i] - coord_x[j], 2) + pow(coord_y[i] - coord_y[j], 2));
-                        if (dist < 1./sqrt((double)coord_x.size())*geom_dens) {
+                    for (long j = i + 1; j < coord_x.size(); j++) {
+                        double dist = sqrt(pow(coord_x[i] - coord_x[j], 2) + pow(coord_y[i] - coord_y[j], 2));
+                        if (dist < 1. / sqrt((double) coord_x.size()) * geom_dens) {
                             weights.push_back(dist * 1000);
                             edges.push_back(i);
                             edges.push_back(j);
@@ -130,12 +131,13 @@ int main(int argc, const char** argv) {
                 }
                 //connect centers
                 for (long i = 0; i < prev_center_id.size(); i++) {
-                    for (long j = i+1; j < prev_center_id.size(); j++) {
+                    for (long j = i + 1; j < prev_center_id.size(); j++) {
                         double prev_center_x_1 = coord_x[prev_center_id[i]];
                         double prev_center_x_2 = coord_x[prev_center_id[j]];
                         double prev_center_y_1 = coord_y[prev_center_id[i]];
                         double prev_center_y_2 = coord_y[prev_center_id[j]];
-                        double dist = sqrt( pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
+                        double dist = sqrt(
+                                pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
                         weights.push_back(dist * 1000);
                         edges.push_back(prev_center_id[i]);
                         edges.push_back(prev_center_id[j]);
@@ -146,10 +148,11 @@ int main(int argc, const char** argv) {
 //                    cout << coord_x[i] << "," << coord_y[i] << endl;
 //                }
                 create_graph(&graph, coord_x.size(), edges);
-                igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
-                if (!check_connected) {
-                    igraph_destroy(&graph);
-                }
+//                igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
+//                if (!check_connected) {
+//                    igraph_destroy(&graph);
+//                }
+//            }
             }
             break;
         default:

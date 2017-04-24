@@ -25,7 +25,7 @@
 class FacilityChooser : public Matcher<long,long,long> {
 public:
     enum State {
-        UNINITIALIZED, NOT_LOCATED, LOCATED, UNFEASIBLE, ERROR
+        UNINITIALIZED, NOT_LOCATED, LOCATED, INFEASIBLE, ERROR
     };
 
     std::vector<long> result;
@@ -36,8 +36,10 @@ public:
     std::vector<long> source_indexes;
     State state = UNINITIALIZED;
     std::vector<long> customer_antirank;
+    std::vector<long> last_used;
     double alpha;
     double gamma;
+    long capacity_iteration;//iteration ID for WMA, utilized in last_used for potential facilities
 
     /*
      * lambda is a parameter that states when to terminate the heap exploration
@@ -62,6 +64,7 @@ public:
         logger->start2("fcla initialization");
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
+        this->source_count = network.source_indexes.size();
         this->facility_capacity = facility_capacity;
         this->logger = logger;
         this->alpha = alpha;
@@ -79,15 +82,35 @@ public:
         //should check here because no access to network in the rest of the code
         //(assuming facility chooser may not have been initialized on a network)
         logger->start1("connectivity check time");
-        igraph_bool_t check_connected;
-        igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
-        if (!check_connected) {
-            //this is important because if one location should be placed - there should be a possibility of
-            //checking the distance from each customer (creation of an edge in bipartite graph)
-            logger->add("error", "Network must be weakly connected");
-            this->state = UNFEASIBLE;
+//        igraph_bool_t check_connected;
+//        igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
+//        if (!check_connected) {
+//            //this is important because if one location should be placed - there should be a possibility of
+//            //checking the distance from each customer (creation of an edge in bipartite graph)
+//            logger->add("error", "Network must be weakly connected");
+//            this->state = INFEASIBLE;
+//            return;
+//        }
+        igraph_integer_t components;
+        igraph_vector_t membership;
+        igraph_vector_init(&membership,0);
+        igraph_clusters(&(network.graph), &membership, 0, &components, IGRAPH_WEAK);
+        logger->add("number of components", components);
+        std::vector<long> customers_sum(components,0);
+        for (long i = 0; i < this->source_count; i++) {
+            customers_sum[VECTOR(membership)[this->source_indexes[i]]]++;
+        }
+        long total_facilities = 0;
+        for (long i = 0; i < components; i++) {
+            total_facilities += ceil((double) customers_sum[i] / (double) this->facility_capacity);
+        }
+        igraph_vector_destroy(&membership);
+        if (total_facilities > this->required_facilities) {
+            logger->add("error", "Problem infeasible by number of components");
+            this->state = INFEASIBLE;
             return;
         }
+
         logger->finish1("connectivity check time");
 #endif
 
@@ -95,7 +118,7 @@ public:
                                                                      network.weights,
                                                                      network.source_indexes);
         graph_size = edge_generator->n + edge_generator->m;
-        source_count = edge_generator->n;
+        this->last_used.resize(edge_generator->m, -1);
         this->customer_antirank.clear();
         this->customer_antirank.resize(source_count);
 
@@ -133,6 +156,10 @@ public:
             long id, init_matching_count;
             heap.dequeue(id, init_matching_count);
             long only_target_id = id - this->source_count; //id in matchings, #of target node without source nodes
+
+            //update usage history here
+            this->last_used[only_target_id] = this->capacity_iteration;
+
             long matching_count = 0;
             // check which matched vertex is still not covered and delete covered ones
 
@@ -454,6 +481,9 @@ public:
             long delta_total_covered = 0;
 
             long facility_id = *current_level_facilities.begin() - source_count; //this is heap idx, that is build by id in bipartite
+            //update usage vector
+            this->last_used[facility_id] = this->capacity_iteration;
+
             current_level_facilities.pop_front();
             //matchings may hold used customers, but we calculate integer delta
             for (std::forward_list<long>::iterator it = matchings[facility_id].begin(); it != matchings[facility_id].end(); it++) {
@@ -490,6 +520,10 @@ public:
             std::forward_list<long>::iterator prev_fac_it = fac_it;
             while (fac_it != current_level_facilities.end()) {
                 long another_facility_id = *fac_it - source_count;
+
+                //update usage vector
+                this->last_used[facility_id] = this->capacity_iteration;
+
                 //if A influenced B then enheap back
                 long new_coverage = 0;
                 bool interfere = false;
@@ -654,7 +688,7 @@ public:
 
         if (this->required_facilities*this->facility_capacity < source_count) {
             logger->add("error", "Problem infeasible: not enough facilities");
-            this->state = UNFEASIBLE;
+            this->state = INFEASIBLE;
             return;
         }
 
@@ -666,7 +700,8 @@ public:
         logger->finish2("prematching time");
 
         // increase customer capacities until we can choose a covering subset of matched services
-        long capacity_iteration = 0;
+        capacity_iteration = 0;
+        std::vector<int> not_complete_sources(source_count, 1);
         while (!this->findSetCover()) {
             capacity_iteration++;
             //increase capacities of everyone
@@ -676,10 +711,11 @@ public:
             //so they do not interfere
             std::vector<long> speed(source_count);
             long max = 0;
-            long total_uncovered = 0;
+            long total_covered = 0;
             for (long i = 0; i < source_count; i++) {
                 speed[i] = this->customer_antirank[i];
-                total_uncovered += (speed[i] == 0);//total covered
+                total_covered += (speed[i] == 0);//total covered
+                speed[i] *= not_complete_sources[i]; //do not increase those with all component explored even if uncovered (hopping for another set cover attempt)
                 max = std::max(speed[i], max);
             }
             if (max == 0) {
@@ -687,7 +723,7 @@ public:
                     speed[i] = 1;
                 }
             } else {
-                double coef = 1 + this->alpha * (double) total_uncovered / (double)source_count;
+                double coef = 1 + this->alpha * (double) total_covered / (double)source_count;
                 for (long i = 0; i < speed.size(); i++) {
                     speed[i] = (long)(coef * (double)speed[i]/(double)max);
                 }
@@ -695,7 +731,10 @@ public:
 
             for (long vid = 0; vid < source_count; vid++) {
                 for (long j = 0; j < speed[vid]; j++) { 
-                    this->increaseCapacity(vid);
+                    int success = this->increaseCapacity(vid);
+                    if (!success) {
+                        not_complete_sources[vid] = 0; //fully explored component
+                    }
                 }
 //                this->increaseCapacity(vid);
             }
@@ -766,7 +805,7 @@ public:
 
     long calculateResult() {
         //calculate Total Sum
-        if (this->state == UNFEASIBLE) {
+        if (this->state == INFEASIBLE) {
             this->totalCost = -1;
             return -1;
         }
