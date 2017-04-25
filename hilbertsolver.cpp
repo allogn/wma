@@ -25,7 +25,7 @@ struct Customer {
 
 struct ComparatorHilbertEntry
 {
-    bool operator()(Customer& r1, Customer& r2)
+    bool operator()(const Customer& r1, const Customer& r2)
     {
         double d1[2],d2[2];
         d1[0] = r1.coords.first;
