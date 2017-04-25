@@ -107,8 +107,9 @@ int main(int argc, const char** argv) {
     igraph_vector_init(&csize,0);
     igraph_clusters(&(net.graph), &membership, &csize, &components, IGRAPH_WEAK);
     logger.add("number of components", components);
-
+cout << components << endl;
     for (long component_id = 0; component_id < components; component_id++) {
+	cout << component_id << "/" << components << endl;
         //select all customers that belong to this components and sort them by hilbert
         std::vector<Customer> customers;
         for (long i = 0; i < net.source_indexes.size(); i++) {
@@ -120,16 +121,21 @@ int main(int argc, const char** argv) {
                 customers.push_back(new_customer);
             }
         }
+cout << "sort" << endl;
         std::sort(customers.begin(),customers.end(),hilbert_comparator);
         //calculate number of facilities to locate by ratio to all components
         long min_required = (long)ceil((double)customers.size() / (double)facility_capacity);
-        long proportion = (long)ceil((double)VECTOR(csize)[component_id] * (double)net.source_indexes.size() / (double)facilities_to_locate);
-        long facilities_per_cluster = std::max(min_required, proportion);
 
+        long proportion = (long)ceil((double)VECTOR(csize)[component_id] * (double)facilities_to_locate / (double)igraph_vcount(&(net.graph)));
+        long facilities_per_cluster = std::max(min_required, proportion);
+cout << facilities_per_cluster << " fac out of " << facilities_to_locate << endl;
         long step = (long)floor(customers.size() / facilities_per_cluster);
+
         for (long i = 0; i < facilities_per_cluster - 1; i++) {
             Coords center = calculateCenter(customers,i*step, (i+1)*step);
+	    cout << "center" << endl;
             long node_id = get_closest(net, &membership, component_id, center);
+		cout << "closest" << endl;
             result.push_back(node_id);
         }
         //put last cluster in the center of remaining customers
@@ -140,7 +146,7 @@ int main(int argc, const char** argv) {
     igraph_vector_destroy(&membership);
     logger.finish("runtime");
 
-
+    cout << "start matching" << endl;
     /*
      * calculate matching for result vector
      */
