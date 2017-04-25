@@ -132,6 +132,10 @@ int main(int argc, const char** argv) {
             long node_id = get_closest(net, &membership, component_id, center);
             result.push_back(node_id);
         }
+        //put last cluster in the center of remaining customers
+        Coords center = calculateCenter(customers,(facilities_per_cluster - 1)*step, customers.size());
+        long node_id = get_closest(net, &membership, component_id, center);
+        result.push_back(node_id);
     }
     igraph_vector_destroy(&membership);
     logger.finish("runtime");
