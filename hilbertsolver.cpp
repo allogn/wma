@@ -14,6 +14,7 @@
 #include "igraph/igraph.h"
 #include "Logger.h"
 #include "Hilbert.h"
+#include "TargetExploringEdgeGenerator.h"
 
 using namespace std;
 namespace po = boost::program_options;
@@ -107,9 +108,8 @@ int main(int argc, const char** argv) {
     igraph_vector_init(&csize,0);
     igraph_clusters(&(net.graph), &membership, &csize, &components, IGRAPH_WEAK);
     logger.add("number of components", components);
-cout << components << endl;
+    long left_facilities = facilities_to_locate;
     for (long component_id = 0; component_id < components; component_id++) {
-	cout << component_id << "/" << components << endl;
         //select all customers that belong to this components and sort them by hilbert
         std::vector<Customer> customers;
         for (long i = 0; i < net.source_indexes.size(); i++) {
@@ -121,32 +121,31 @@ cout << components << endl;
                 customers.push_back(new_customer);
             }
         }
-cout << "sort" << endl;
         std::sort(customers.begin(),customers.end(),hilbert_comparator);
         //calculate number of facilities to locate by ratio to all components
         long min_required = (long)ceil((double)customers.size() / (double)facility_capacity);
 
-        long proportion = (long)ceil((double)VECTOR(csize)[component_id] * (double)facilities_to_locate / (double)igraph_vcount(&(net.graph)));
+        long proportion = (long)((double)VECTOR(csize)[component_id] * (double)facilities_to_locate / (double)igraph_vcount(&(net.graph)));
         long facilities_per_cluster = std::max(min_required, proportion);
-cout << facilities_per_cluster << " fac out of " << facilities_to_locate << endl;
-        long step = (long)floor(customers.size() / facilities_per_cluster);
-
-        for (long i = 0; i < facilities_per_cluster - 1; i++) {
-            Coords center = calculateCenter(customers,i*step, (i+1)*step);
-	    cout << "center" << endl;
+        facilities_per_cluster = std::min(facilities_per_cluster, left_facilities);
+        left_facilities -= facilities_per_cluster;
+        if (facilities_per_cluster > 0) {
+            long step = (long)floor(customers.size() / facilities_per_cluster);
+            for (long i = 0; i < facilities_per_cluster - 1; i++) {
+                Coords center = calculateCenter(customers,i*step, (i+1)*step);
+                long node_id = get_closest(net, &membership, component_id, center);
+                result.push_back(node_id);
+            }
+            //put last cluster in the center of remaining customers
+            Coords center = calculateCenter(customers,(facilities_per_cluster - 1)*step, customers.size());
             long node_id = get_closest(net, &membership, component_id, center);
-		cout << "closest" << endl;
             result.push_back(node_id);
         }
-        //put last cluster in the center of remaining customers
-        Coords center = calculateCenter(customers,(facilities_per_cluster - 1)*step, customers.size());
-        long node_id = get_closest(net, &membership, component_id, center);
-        result.push_back(node_id);
     }
+    assert(result.size() == facilities_to_locate);
     igraph_vector_destroy(&membership);
     logger.finish("runtime");
 
-    cout << "start matching" << endl;
     /*
      * calculate matching for result vector
      */
@@ -154,7 +153,7 @@ cout << facilities_per_cluster << " fac out of " << facilities_to_locate << endl
     for (long i = 0; i < net.source_indexes.size(); i++) {
         new_excess[i] = -1;
     }
-    ExploringEdgeGenerator<long,long> edge_generator(net);
+    TargetExploringEdgeGenerator<long,long> edge_generator(net, result);
     Matcher<long,long,long> M(&edge_generator, new_excess, &logger);
     M.run();
     M.calculateResult();
