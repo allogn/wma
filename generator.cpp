@@ -15,7 +15,7 @@
 using namespace std;
 namespace po = boost::program_options;
 
-void create_cluster(std::vector<double>& x, std::vector<double>& y, long n, double std, double center_x, double center_y) {
+void create_cluster(std::vector<Coords>& coords, long n, double std, double center_x, double center_y) {
     igraph_rng_t rng_x;
     igraph_rng_t rng_y;
     igraph_rng_init(&rng_x, &igraph_rngtype_mt19937);
@@ -33,8 +33,7 @@ void create_cluster(std::vector<double>& x, std::vector<double>& y, long n, doub
         while (y_point < 0 || y_point > 1) {
             y_point = igraph_rng_get_normal(&rng_y, center_y, std);
         }
-        x.push_back(x_point);
-        y.push_back(y_point);
+        coords.push_back(std::make_pair(x_point,y_point));
     }
 }
 
@@ -75,8 +74,7 @@ int main(int argc, const char** argv) {
 
     igraph_t graph;
     vector<long> weights;
-    std::vector<double> coord_x;
-    std::vector<double> coord_y;
+    std::vector<Coords> coords;
     std::vector<long> edges;
     igraph_rng_t rng_x;
     igraph_rng_t rng_y;
@@ -89,6 +87,10 @@ int main(int argc, const char** argv) {
             igraph_vector_t x;
             igraph_vector_t y;
             generate_random_geometric_graph(n, 1./sqrt((double)n)*geom_dens, &graph, weights, &x, &y);
+            coords.clear();
+            for (long i = 0; i < n; i++) {
+                coords.push_back(std::make_pair(VECTOR(x)[i],VECTOR(y)[i]));
+            }
             igraph_vector_destroy(&x);
             igraph_vector_destroy(&y);
             break;
@@ -101,8 +103,8 @@ int main(int argc, const char** argv) {
             check_connected = false;
 //            while (!check_connected) {
             {
-                coord_x.clear();
-                coord_y.clear();
+                coords.clear();
+                coords.clear();
                 edges.clear();
                 weights.clear();
                 std::vector<long> prev_center_id;
@@ -111,18 +113,17 @@ int main(int argc, const char** argv) {
                     igraph_real_t y_center;
                     x_center = igraph_rng_get_unif01(&rng_x);
                     y_center = igraph_rng_get_unif01(&rng_y);
-                    create_cluster(coord_x, coord_y, n / clusters, 1. / clusters, x_center, y_center);
-                    prev_center_id.push_back(coord_x.size());
-                    coord_x.push_back(x_center);
-                    coord_y.push_back(y_center);
+                    create_cluster(coords, n / clusters, 1. / clusters, x_center, y_center);
+                    prev_center_id.push_back(coords.size());
+                    coords.push_back(std::make_pair(x_center,y_center));
                 }
 
                 //create graph and add all edges with weights. weights multiply by 1000
-                igraph_empty(&graph, coord_x.size(), false);
-                for (long i = 0; i < coord_x.size(); i++) {
-                    for (long j = i + 1; j < coord_x.size(); j++) {
-                        double dist = sqrt(pow(coord_x[i] - coord_x[j], 2) + pow(coord_y[i] - coord_y[j], 2));
-                        if (dist < 1. / sqrt((double) coord_x.size()) * geom_dens) {
+                igraph_empty(&graph, coords.size(), false);
+                for (long i = 0; i < coords.size(); i++) {
+                    for (long j = i + 1; j < coords.size(); j++) {
+                        double dist = sqrt(pow(coords[i].first - coords[j].first, 2) + pow(coords[i].second - coords[j].second, 2));
+                        if (dist < 1. / sqrt((double) coords.size()) * geom_dens) {
                             weights.push_back(dist * 1000);
                             edges.push_back(i);
                             edges.push_back(j);
@@ -132,10 +133,10 @@ int main(int argc, const char** argv) {
                 //connect centers
                 for (long i = 0; i < prev_center_id.size(); i++) {
                     for (long j = i + 1; j < prev_center_id.size(); j++) {
-                        double prev_center_x_1 = coord_x[prev_center_id[i]];
-                        double prev_center_x_2 = coord_x[prev_center_id[j]];
-                        double prev_center_y_1 = coord_y[prev_center_id[i]];
-                        double prev_center_y_2 = coord_y[prev_center_id[j]];
+                        double prev_center_x_1 = coords[prev_center_id[i]].first;
+                        double prev_center_x_2 = coords[prev_center_id[j]].first;
+                        double prev_center_y_1 = coords[prev_center_id[i]].second;
+                        double prev_center_y_2 = coords[prev_center_id[j]].second;
                         double dist = sqrt(
                                 pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
                         weights.push_back(dist * 1000);
@@ -144,10 +145,10 @@ int main(int argc, const char** argv) {
                     }
                 }
                 //for point plotting
-//                for (long i = 0; i < coord_x.size(); i++) {
-//                    cout << coord_x[i] << "," << coord_y[i] << endl;
+//                for (long i = 0; i < coords.size(); i++) {
+//                    cout << coords[i] << "," << coords[i] << endl;
 //                }
-                create_graph(&graph, coord_x.size(), edges);
+                create_graph(&graph, coords.size(), edges);
 //                igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
 //                if (!check_connected) {
 //                    igraph_destroy(&graph);
@@ -166,6 +167,6 @@ int main(int argc, const char** argv) {
     std::vector<long> source_indexes(sources);
     for (long i = 0; i < sources; i++) source_indexes[i] = all_nodes[i];
 
-    Network network(&graph, weights, source_indexes);
+    Network network(&graph, weights, source_indexes, coords);
     network.save(outdir);
 }

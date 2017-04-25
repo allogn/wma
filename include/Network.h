@@ -18,9 +18,26 @@ public:
     std::string id;
     std::vector<long> weights;
     std::vector<long> source_indexes;
+    std::vector<std::pair<double,double>> coords; //in case there are coordinates
 
     Network(std::string filename) {
         this->load(filename);
+    }
+    Network(igraph_t* g,
+            std::vector<long>& weights,
+            std::vector<long>& source_indexes,
+            std::vector<Coords>& coords) {
+        igraph_copy(&this->graph, g);
+        this->weights = weights;
+        this->source_indexes = source_indexes;
+        this->coords = coords;
+
+        //generate unique id
+        struct timespec spec;
+        clock_gettime(CLOCK_REALTIME, &spec);
+        srand (spec.tv_nsec);
+        std::string strtime = std::to_string(spec.tv_sec) + std::to_string(spec.tv_nsec);
+        this->id = strtime.substr(0, strtime.size()-3) + std::to_string(rand() % 1000);
     }
     Network(igraph_t* g,
             std::vector<long>& weights,
@@ -28,6 +45,8 @@ public:
         igraph_copy(&this->graph, g);
         this->weights = weights;
         this->source_indexes = source_indexes;
+        std::vector<std::pair<double, double>> v(weights.size());
+        this->coords = v;
 
         //generate unique id
         struct timespec spec;
@@ -49,7 +68,7 @@ public:
         for (long i = 0; i < igraph_ecount(&graph); i++) {
             igraph_integer_t from, to;
             igraph_edge(&graph, i, &from, &to);
-            outf << from << " " << to << " " << weights[i] << "\n";
+            outf << from << " " << to << " " << weights[i] << " " << coords[i].first << " " << coords[i].second << "\n";
         }
         for (long i = 0; i < source_indexes.size(); i++) {
             outf << source_indexes[i] << "\n";
@@ -76,10 +95,12 @@ public:
         weights.reserve(ecount);
         for (long i = 0; i < ecount; i++) {
             long from, to, weight, capacity;
-            infile >> from >> to >> weight;
+            double x,y;
+            infile >> from >> to >> weight >> x >> y;
             VECTOR(edges)[2*i] = from;
             VECTOR(edges)[2*i + 1] = to;
             weights.push_back(weight);
+            coords.push_back(std::make_pair(x,y));
         }
         igraph_add_edges(&this->graph, &edges, 0);
         source_indexes.clear();

@@ -119,7 +119,13 @@ public:
         std::random_shuffle(source_index.begin(),source_index.end());
         source_index.resize(source_num);
 
-        Network net(&this->graph, this->weights, source_index);
+        std::vector<Coords> coords;
+        for(igraph_integer_t i = 0; i < igraph_vcount(&graph); i++) {
+            igraph_real_t x1 = igraph_cattribute_VAN(&graph, "X", i);
+            igraph_real_t y1 = igraph_cattribute_VAN(&graph, "Y", i);
+            coords.push_back(std::make_pair(x1,y1));
+        }
+        Network net(&this->graph, this->weights, source_index, coords);
         net.save(outdir);
     }
 };

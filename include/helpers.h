@@ -20,7 +20,7 @@ inline bool file_exists (const std::string& name) {
     return (stat (name.c_str(), &buffer) == 0);
 }
 
-typedef std::pair<float, float> coords;
+typedef std::pair<double, double> Coords;
 
 
 /*

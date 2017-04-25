@@ -8,6 +8,7 @@ add_definitions(-D_DEBUG_=${DEBUG})
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options -lprotobuf-lite -losmpbf -lz")
 
 include_directories(${CMAKE_SOURCE_DIR}/include/)
+include_directories(${CMAKE_SOURCE_DIR}/src/)
 
 # BOOST libraries
 find_package(Boost REQUIRED)
@@ -45,6 +46,9 @@ target_link_libraries(generator ${Boost_LIBRARIES};${IGRAPH_LIBS})
 
 add_executable(brutesolver brutesolver.cpp)
 target_link_libraries(brutesolver ${Boost_LIBRARIES};${IGRAPH_LIBS})
+
+add_executable(hilbertsolver hilbertsolver.cpp ${SOURCE_FILES})
+target_link_libraries(hilbertsolver ${Boost_LIBRARIES};${IGRAPH_LIBS};)
 
 add_executable(SIA_tests tests/SIA_tests.cpp)
 target_link_libraries(SIA_tests ${Boost_LIBRARIES};)
