@@ -125,7 +125,7 @@ int main(int argc, const char** argv) {
         //calculate number of facilities to locate by ratio to all components
         long min_required = (long)ceil((double)customers.size() / (double)facility_capacity);
 
-        long proportion = (long)((double)VECTOR(csize)[component_id] * (double)facilities_to_locate / (double)igraph_vcount(&(net.graph)));
+        long proportion = (long)ceil((double)VECTOR(csize)[component_id] * (double)facilities_to_locate / (double)igraph_vcount(&(net.graph)));
         long facilities_per_cluster = std::max(min_required, proportion);
         facilities_per_cluster = std::min(facilities_per_cluster, left_facilities);
         left_facilities -= facilities_per_cluster;
