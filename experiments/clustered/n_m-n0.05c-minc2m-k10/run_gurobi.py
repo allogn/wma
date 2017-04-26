@@ -7,13 +7,13 @@ import datetime
 root_path = os.environ['FCLA_ROOT']
 data_path = os.environ['DATA_PATH']
 expdir = 'n_m-n0.05c-minc2m-k10'
-total = len(os.listdir(path.join(data_path,'geometric',expdir)))
+total = len(os.listdir(path.join(data_path,'clustered',expdir)))
 count = 0
-for f in os.listdir(path.join(data_path,'geometric',expdir)):
+for f in os.listdir(path.join(data_path,'clustered',expdir)):
     if f[-4:] != '.ntw':
         continue
     count += 1
-    full_target_path = path.join(data_path,'geometric',expdir,f)
+    full_target_path = path.join(data_path,'clustered',expdir,f)
     print(" ".join((str(datetime.datetime.now()),full_target_path,"(",str(count),"/",str(total),")")))
 
     edges = 0
@@ -35,7 +35,7 @@ for f in os.listdir(path.join(data_path,'geometric',expdir)):
 			  full_target_path,
 			  str(capacity),
 			  str(facilities),
-			  path.join(data_path,'geometric',expdir,'solutions','gurobi',id + "fac" + str(facilities) + ".json")],
+			  path.join(data_path,'clustered',expdir,'solutions','gurobi',id + "fac" + str(facilities) + ".json")],
 			  stdout=subprocess.PIPE,
 			  stderr=subprocess.PIPE)
     p.wait()

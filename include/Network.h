@@ -68,11 +68,14 @@ public:
         for (long i = 0; i < igraph_ecount(&graph); i++) {
             igraph_integer_t from, to;
             igraph_edge(&graph, i, &from, &to);
-            outf << from << " " << to << " " << weights[i] << " " << coords[i].first << " " << coords[i].second << "\n";
+            outf << from << " " << to << " " << weights[i] << "\n";
         }
         for (long i = 0; i < source_indexes.size(); i++) {
             outf << source_indexes[i] << "\n";
         }
+	for (long i = 0; i < igraph_vcount(&graph); i++) {
+	    outf << coords[i].first << " " << coords[i].second << "\n";
+	}
         outf.close();
     }
 
@@ -95,12 +98,10 @@ public:
         weights.reserve(ecount);
         for (long i = 0; i < ecount; i++) {
             long from, to, weight, capacity;
-            double x,y;
-            infile >> from >> to >> weight >> x >> y;
+            infile >> from >> to >> weight;
             VECTOR(edges)[2*i] = from;
             VECTOR(edges)[2*i + 1] = to;
             weights.push_back(weight);
-            coords.push_back(std::make_pair(x,y));
         }
         igraph_add_edges(&this->graph, &edges, 0);
         source_indexes.clear();
@@ -109,6 +110,11 @@ public:
             long source_id;
             infile >> source_id;
             source_indexes.push_back(source_id);
+        }
+        for (long i = 0; i < vcount; i++) {
+            double x,y;
+            infile >> x >> y;
+            coords.push_back(std::make_pair(x,y));
         }
 
         //check if consistent

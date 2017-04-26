@@ -43,11 +43,11 @@ inline double get_dist(Coords& c1, Coords& c2)
     return sqrt(pow(c1.first-c2.first,2) + pow(c1.second-c2.second,2));
 }
 
-long get_closest(Network& network, igraph_vector_t* membership, long cluster_id, Coords& center) {
+long get_closest(std::vector<bool>& used, Network& network, igraph_vector_t* membership, long cluster_id, Coords& center) {
     long best_index = -1;
     double best_dist = INFINITY;
     for (long i = 0; i < network.coords.size(); i++) {
-        if (VECTOR(*membership)[i] == cluster_id) {
+        if (VECTOR(*membership)[i] == cluster_id && !used[i]) {
             double dist = get_dist(center, network.coords[i]);
             if (dist < best_dist) {
                 best_dist = dist;
@@ -55,6 +55,8 @@ long get_closest(Network& network, igraph_vector_t* membership, long cluster_id,
             }
         }
     }
+    assert(best_index > -1);
+    used[best_index] = true;
     return best_index;
 }
 
@@ -101,6 +103,7 @@ int main(int argc, const char** argv) {
     logger.start("runtime");
 
     std::vector<long> result;
+    std::vector<bool> used(igraph_vcount(&net.graph),false);
     igraph_integer_t components;
     igraph_vector_t membership;
     igraph_vector_t csize;
@@ -108,38 +111,41 @@ int main(int argc, const char** argv) {
     igraph_vector_init(&csize,0);
     igraph_clusters(&(net.graph), &membership, &csize, &components, IGRAPH_WEAK);
     logger.add("number of components", components);
+    logger.start("calculate customers");
+    std::vector<std::vector<Customer>> customers_per_component;
+    std::vector<long> facility_per_component(components,0);
     long left_facilities = facilities_to_locate;
     for (long component_id = 0; component_id < components; component_id++) {
-        //select all customers that belong to this components and sort them by hilbert
-        std::vector<Customer> customers;
-        for (long i = 0; i < net.source_indexes.size(); i++) {
+         std::vector<Customer> v;
+         for (long i = 0; i < net.source_indexes.size(); i++) {
             if (VECTOR(membership)[net.source_indexes[i]] == component_id) {
                 Customer new_customer;
                 new_customer.coords.first = net.coords[net.source_indexes[i]].first;
                 new_customer.coords.second = net.coords[net.source_indexes[i]].second;
                 new_customer.index = i;
-                customers.push_back(new_customer);
+                v.push_back(new_customer);
             }
         }
-        std::sort(customers.begin(),customers.end(),hilbert_comparator);
-        //calculate number of facilities to locate by ratio to all components
-        long min_required = (long)ceil((double)customers.size() / (double)facility_capacity);
-
-        long proportion = (long)ceil((double)VECTOR(csize)[component_id] * (double)facilities_to_locate / (double)igraph_vcount(&(net.graph)));
-        long facilities_per_cluster = std::max(min_required, proportion);
-        facilities_per_cluster = std::min(facilities_per_cluster, left_facilities);
-        left_facilities -= facilities_per_cluster;
+        std::sort(v.begin(),v.end(),hilbert_comparator);
+        customers_per_component.push_back(v);
+        facility_per_component[component_id] += (long)ceil((double)v.size() / (double)facility_capacity); 
+        left_facilities -= facility_per_component[component_id];
+    }
+    logger.finish("calculate components");
+    long extra = left_facilities;
+    for (long component_id = 0; component_id < components; component_id++) {
+        long proportion = (long)ceil((double)customers_per_component[component_id].size() * (double)extra / (double)net.source_indexes.size());
+        proportion = std::min(proportion, left_facilities);
+        left_facilities -= proportion;
+        long facilities_per_cluster = proportion + facility_per_component[component_id];
         if (facilities_per_cluster > 0) {
+            std::vector<Customer> customers = customers_per_component[component_id];
             long step = (long)floor(customers.size() / facilities_per_cluster);
-            for (long i = 0; i < facilities_per_cluster - 1; i++) {
+            for (long i = 0; i < facilities_per_cluster; i++) {
                 Coords center = calculateCenter(customers,i*step, (i+1)*step);
-                long node_id = get_closest(net, &membership, component_id, center);
+                long node_id = get_closest(used,net, &membership, component_id, center);
                 result.push_back(node_id);
             }
-            //put last cluster in the center of remaining customers
-            Coords center = calculateCenter(customers,(facilities_per_cluster - 1)*step, customers.size());
-            long node_id = get_closest(net, &membership, component_id, center);
-            result.push_back(node_id);
         }
     }
     assert(result.size() == facilities_to_locate);
