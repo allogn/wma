@@ -79,19 +79,10 @@ public:
         this->required_facilities = facilities_to_locate;
         this->lambda = lambda;
 
-#if _DEBUG_ > 0
-        //should check here because no access to network in the rest of the code
-        //(assuming facility chooser may not have been initialized on a network)
+        /*
+         * Check feasibility by number of components
+         */
         logger->start1("connectivity check time");
-//        igraph_bool_t check_connected;
-//        igraph_is_connected(&(network.graph),&check_connected,IGRAPH_WEAK);
-//        if (!check_connected) {
-//            //this is important because if one location should be placed - there should be a possibility of
-//            //checking the distance from each customer (creation of an edge in bipartite graph)
-//            logger->add("error", "Network must be weakly connected");
-//            this->state = INFEASIBLE;
-//            return;
-//        }
         igraph_integer_t components;
         igraph_vector_t membership;
         igraph_vector_init(&membership,0);
@@ -109,11 +100,9 @@ public:
         if (total_facilities > this->required_facilities) {
             logger->add("error", "Problem infeasible by number of components");
             this->state = INFEASIBLE;
-            return;
         }
-
         logger->finish1("connectivity check time");
-#endif
+        //create generator anyway
 
         this->edge_generator = new ExploringEdgeGenerator<long,long>(&(network.graph),
                                                                      network.weights,
@@ -133,7 +122,7 @@ public:
 
         //reset variables of the matching algorithm
         reset();
-        this->state = NOT_LOCATED;
+        if (this->state != INFEASIBLE) this->state = NOT_LOCATED;
         logger->finish("fcla initialization");
     }
 
