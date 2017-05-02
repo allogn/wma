@@ -53,6 +53,7 @@ int main(int argc, const char** argv) {
     long sources;
     double geom_dens;
     long clusters;
+    bool connected;
 
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -61,6 +62,7 @@ int main(int argc, const char** argv) {
             ("output,o", po::value<string>(&outdir)->required(), "Output directory")
             ("nodes,n", po::value<long>(&n)->required(), "Size of a graph")
             ("density,d", po::value<double>(&geom_dens)->default_value(1), "Density of a geometric graph, relatively to size")
+	    ("connected,u", po::value<bool>(&connected)->default_value(false), "Force to have one component")
             ("clusters,c", po::value<long>(&clusters)->default_value(1), "Number of clusters")
             ("sources,s", po::value<long>(&sources)->default_value(1), "Number of Sources (customers)");
 
@@ -78,86 +80,91 @@ int main(int argc, const char** argv) {
     std::vector<long> edges;
     igraph_rng_t rng_x;
     igraph_rng_t rng_y;
-    igraph_bool_t check_connected;
-    switch (graph_type) {
-        /*
-         * Density is a distance between connected nodes in 1x1 square
-         */
-        case GEOMETRIC:
-            igraph_vector_t x;
-            igraph_vector_t y;
-            generate_random_geometric_graph(n, 1./sqrt((double)n)*geom_dens, &graph, weights, &x, &y);
-            coords.clear();
-            for (long i = 0; i < n; i++) {
-                coords.push_back(std::make_pair(VECTOR(x)[i],VECTOR(y)[i]));
-            }
-            igraph_vector_destroy(&x);
-            igraph_vector_destroy(&y);
-            break;
-        case CLUSTERED:
-            //create a list of points and then connect close ones
-            igraph_rng_init(&rng_x, &igraph_rngtype_mt19937);
-            igraph_rng_seed(&rng_x, time(NULL));
-            igraph_rng_init(&rng_y, &igraph_rngtype_mt19937);
-            igraph_rng_seed(&rng_y, time(NULL)/2);
-            check_connected = false;
-//            while (!check_connected) {
-            {
-                coords.clear();
-                coords.clear();
-                edges.clear();
-                weights.clear();
-                std::vector<long> prev_center_id;
-                for (long cl = 0; cl < clusters; cl++) {
-                    igraph_real_t x_center;
-                    igraph_real_t y_center;
-                    x_center = igraph_rng_get_unif01(&rng_x);
-                    y_center = igraph_rng_get_unif01(&rng_y);
-                    create_cluster(coords, n / clusters, 1. / clusters, x_center, y_center);
-                    prev_center_id.push_back(coords.size());
-                    coords.push_back(std::make_pair(x_center,y_center));
-                }
+    igraph_bool_t check_connected = false;
+    while (!check_connected) {
+   	    coords.clear();
+	    coords.clear();
+	    edges.clear();
+	    weights.clear();
 
-                //create graph and add all edges with weights. weights multiply by 1000
-                igraph_empty(&graph, coords.size(), false);
-                for (long i = 0; i < coords.size(); i++) {
-                    for (long j = i + 1; j < coords.size(); j++) {
-                        double dist = sqrt(pow(coords[i].first - coords[j].first, 2) + pow(coords[i].second - coords[j].second, 2));
-                        if (dist < 1. / sqrt((double) coords.size()) * geom_dens) {
-                            weights.push_back(dist * 1000);
-                            edges.push_back(i);
-                            edges.push_back(j);
-                        }
-                    }
-                }
-                //connect centers
-                for (long i = 0; i < prev_center_id.size(); i++) {
-                    for (long j = i + 1; j < prev_center_id.size(); j++) {
-                        double prev_center_x_1 = coords[prev_center_id[i]].first;
-                        double prev_center_x_2 = coords[prev_center_id[j]].first;
-                        double prev_center_y_1 = coords[prev_center_id[i]].second;
-                        double prev_center_y_2 = coords[prev_center_id[j]].second;
-                        double dist = sqrt(
-                                pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
-                        weights.push_back(dist * 1000);
-                        edges.push_back(prev_center_id[i]);
-                        edges.push_back(prev_center_id[j]);
-                    }
-                }
-                //for point plotting
-//                for (long i = 0; i < coords.size(); i++) {
-//                    cout << coords[i] << "," << coords[i] << endl;
-//                }
-                create_graph(&graph, coords.size(), edges);
-//                igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
-//                if (!check_connected) {
-//                    igraph_destroy(&graph);
-//                }
-//            }
-            }
-            break;
-        default:
-            throw "Method is not implemented";
+	    switch (graph_type) {
+		/*
+		 * Density is a distance between connected nodes in 1x1 square
+		 */
+		case GEOMETRIC:
+		    igraph_vector_t x;
+		    igraph_vector_t y;
+		    generate_random_geometric_graph(n, 1./sqrt((double)n)*geom_dens, &graph, weights, &x, &y);
+		    coords.clear();
+		    for (long i = 0; i < n; i++) {
+			coords.push_back(std::make_pair(VECTOR(x)[i],VECTOR(y)[i]));
+		    }
+		    igraph_vector_destroy(&x);
+		    igraph_vector_destroy(&y);
+		    break;
+		case CLUSTERED:
+		    //create a list of points and then connect close ones
+		    igraph_rng_init(&rng_x, &igraph_rngtype_mt19937);
+		    igraph_rng_seed(&rng_x, time(NULL));
+		    igraph_rng_init(&rng_y, &igraph_rngtype_mt19937);
+		    igraph_rng_seed(&rng_y, time(NULL)/2);
+		    check_connected = false;
+		    {
+		        std::vector<long> prev_center_id;
+			for (long cl = 0; cl < clusters; cl++) {
+			    igraph_real_t x_center;
+			    igraph_real_t y_center;
+			    x_center = igraph_rng_get_unif01(&rng_x);
+			    y_center = igraph_rng_get_unif01(&rng_y);
+			    create_cluster(coords, n / clusters, 1. / clusters, x_center, y_center);
+			    prev_center_id.push_back(coords.size());
+			    coords.push_back(std::make_pair(x_center,y_center));
+			}
+
+			//create graph and add all edges with weights. weights multiply by 1000
+			igraph_empty(&graph, coords.size(), false);
+			for (long i = 0; i < coords.size(); i++) {
+			    for (long j = i + 1; j < coords.size(); j++) {
+				double dist = sqrt(pow(coords[i].first - coords[j].first, 2) + pow(coords[i].second - coords[j].second, 2));
+				if (dist < 1. / sqrt((double) coords.size()) * geom_dens) {
+				    weights.push_back(dist * 1000);
+				    edges.push_back(i);
+				    edges.push_back(j);
+				}
+			    }
+			}
+			//connect centers
+			for (long i = 0; i < prev_center_id.size(); i++) {
+			    for (long j = i + 1; j < prev_center_id.size(); j++) {
+				double prev_center_x_1 = coords[prev_center_id[i]].first;
+				double prev_center_x_2 = coords[prev_center_id[j]].first;
+				double prev_center_y_1 = coords[prev_center_id[i]].second;
+				double prev_center_y_2 = coords[prev_center_id[j]].second;
+				double dist = sqrt(
+					pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
+				weights.push_back(dist * 1000);
+				edges.push_back(prev_center_id[i]);
+				edges.push_back(prev_center_id[j]);
+			    }
+			}
+			//for point plotting
+	//                for (long i = 0; i < coords.size(); i++) {
+	//                    cout << coords[i] << "," << coords[i] << endl;
+	//                }
+			create_graph(&graph, coords.size(), edges);
+		    }
+		    break;
+		default:
+		    throw "Method is not implemented";
+	    }
+         if (!connected) {
+              check_connected = true;
+         } else {
+		 igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
+		 if (!check_connected) {
+		      igraph_destroy(&graph);
+		 }
+         }
     }
 
     //choose source_indexes randomly

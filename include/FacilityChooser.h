@@ -103,7 +103,6 @@ public:
         }
         logger->finish1("connectivity check time");
         //create generator anyway
-
         this->edge_generator = new ExploringEdgeGenerator<long,long>(&(network.graph),
                                                                      network.weights,
                                                                      network.source_indexes);
