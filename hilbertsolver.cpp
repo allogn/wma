@@ -131,15 +131,19 @@ int main(int argc, const char** argv) {
         facility_per_component[component_id] += (long)ceil((double)v.size() / (double)facility_capacity); 
         left_facilities -= facility_per_component[component_id];
     }
+    assert(left_facilities >= 0);
     logger.finish("calculate components");
     long extra = left_facilities;
     for (long component_id = 0; component_id < components; component_id++) {
         long proportion = (long)ceil((double)customers_per_component[component_id].size() * (double)extra / (double)net.source_indexes.size());
         proportion = std::min(proportion, left_facilities);
+        std::vector<Customer> customers = customers_per_component[component_id];
+        assert(customers.size() >= facility_per_component[component_id]);
+        proportion = std::min(proportion, (long) (customers.size() - facility_per_component[component_id]));
         left_facilities -= proportion;
         long facilities_per_cluster = proportion + facility_per_component[component_id];
         if (facilities_per_cluster > 0) {
-            std::vector<Customer> customers = customers_per_component[component_id];
+	    assert(customers.size() >= facilities_per_cluster);
             long step = (long)floor(customers.size() / facilities_per_cluster);
             for (long i = 0; i < facilities_per_cluster; i++) {
                 Coords center = calculateCenter(customers,i*step, (i+1)*step);
