@@ -52,6 +52,10 @@ long get_closest(std::vector<bool>& used, Network& network, igraph_vector_t* mem
             if (dist < best_dist) {
                 best_dist = dist;
                 best_index = i;
+            } else {
+		if (best_index == -1) {
+			cout << i << " " << network.coords[i].first << " " << network.coords[i].second << " " << center.first << " " << center.second << endl; 
+		}
             }
         }
     }
@@ -138,15 +142,32 @@ int main(int argc, const char** argv) {
         long proportion = (long)ceil((double)customers_per_component[component_id].size() * (double)extra / (double)net.source_indexes.size());
         proportion = std::min(proportion, left_facilities);
         std::vector<Customer> customers = customers_per_component[component_id];
-        assert(customers.size() >= facility_per_component[component_id]);
-        proportion = std::min(proportion, (long) (customers.size() - facility_per_component[component_id]));
+        proportion = std::min(proportion, (long) (VECTOR(csize)[component_id] - facility_per_component[component_id]));
         left_facilities -= proportion;
-        long facilities_per_cluster = proportion + facility_per_component[component_id];
+        facility_per_component[component_id] += proportion;
+    }
+    //distribute in round robin
+    long cur_clust = 0;
+    while (left_facilities > 0) {
+        if (VECTOR(csize)[cur_clust] > facility_per_component[cur_clust]) {
+            facility_per_component[cur_clust]++;
+            left_facilities--;
+        }
+        cur_clust = (++cur_clust == components) ? 0 : cur_clust;
+    }
+    for (long component_id = 0; component_id < components; component_id++) {
+        long facilities_per_cluster = facility_per_component[component_id];
         if (facilities_per_cluster > 0) {
-	    assert(customers.size() >= facilities_per_cluster);
+            std::vector<Customer> customers = customers_per_component[component_id];
             long step = (long)floor(customers.size() / facilities_per_cluster);
+            Coords center;
+            if (step == 0) { 
+                center = calculateCenter(customers,0,1);
+            }
             for (long i = 0; i < facilities_per_cluster; i++) {
-                Coords center = calculateCenter(customers,i*step, (i+1)*step);
+                if (step > 0) center = calculateCenter(customers,i*step, (i+1)*step);
+		assert(customers.size() <= VECTOR(csize)[component_id]);
+                assert(VECTOR(csize)[component_id] >= facilities_per_cluster);
                 long node_id = get_closest(used,net, &membership, component_id, center);
                 result.push_back(node_id);
             }
