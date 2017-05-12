@@ -746,6 +746,16 @@ public:
         }
         logger->add1("number of iterations", capacity_iteration);
 
+        //save number of "full" facilities
+        long fullfac = 0;
+        long nullfac = 0;
+        for (long i = this->source_indexes.size(); i < graph_size; i++) {
+            fullfac += (node_excess[i] == 0);
+            nullfac += (node_excess[i] == facility_capacity);
+        }
+        logger->add1("fullfac", fullfac);
+        logger->add1("nullfac", nullfac);
+
         /*
          * we place "free" facilities right near the customers with "farthest" matching
          * so in calculateResult function we must recalculate distances
@@ -833,6 +843,13 @@ public:
         M.run();
         M.calculateResult();
         this->totalCost = M.result_weight;
+
+        //calculate number of fully capacitated nodes
+        long capn = 0;
+        for (long i = this->source_indexes.size(); i < M.node_excess.size(); i++) {
+            capn += (M.node_excess[i] == 0);
+        }
+        logger->add1("full facilities", capn);
 
         logger->finish("result final calculation time");
         logger->add("objective", totalCost);
