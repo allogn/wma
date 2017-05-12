@@ -25,9 +25,9 @@ def run(network_file,facility_capacity,number_of_facilities):
         experiment_info['error'] = 'not enough facilities'
         return experiment_info
 
-    if not nx.is_connected(network.G):
-        experiment_info['error'] = 'graph is not connected'
-        return experiment_info
+#    if not nx.is_connected(network.G):
+#        experiment_info['error'] = 'graph is not connected'
+#        return experiment_info
 
     m = Model()
     m.setParam('OutputFlag', False)
@@ -46,7 +46,10 @@ def run(network_file,facility_capacity,number_of_facilities):
     for i in range(numClients):
         for j in range(numFacilities):
             y[(i, j)] = m.addVar(vtype=GRB.BINARY, name="t%d,%d" % (i,j))
-            d[(i, j)] = p[network.sources[i]][j]
+            try:
+                d[(i, j)] = p[network.sources[i]][j]
+            except KeyError:
+                d[(i,j)] = float("inf")
 
     m.update()
 

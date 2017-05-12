@@ -130,7 +130,7 @@ int main(int argc, const char** argv) {
                 v.push_back(new_customer);
             }
         }
-        std::sort(v.begin(),v.end(),hilbert_comparator);
+        if (v.size() > 0) std::sort(v.begin(),v.end(),hilbert_comparator);
         customers_per_component.push_back(v);
         facility_per_component[component_id] += (long)ceil((double)v.size() / (double)facility_capacity); 
         left_facilities -= facility_per_component[component_id];

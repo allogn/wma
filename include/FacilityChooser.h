@@ -28,7 +28,7 @@ public:
     enum State {
         UNINITIALIZED, NOT_LOCATED, LOCATED, INFEASIBLE, ERROR
     };
-
+    long max_coverage;
     std::vector<long> result;
     long totalCost;
     long required_facilities;
@@ -420,7 +420,8 @@ public:
         }
 
         //now check if we need brute force
-        if (this->facility_capacity - current_coverage >= gamma) {
+        if (this->max_coverage - current_coverage >= gamma) {
+        //if (this->facility_capacity - current_coverage >= gamma) {
             logger->add2("proceedLevelType",0);
             //now run greedy algorithm, that chooses the best subset from a heap for current delta_covered set
             logger->start2("greedy set cover time");
@@ -679,6 +680,7 @@ public:
         std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
         long total_covered = 0;
         std::vector<long> covered(this->source_count, 0);
+	this->max_coverage = heap.getTopValue().coverage;
         if_result = proceedLevel(covered, total_covered, heap, matchings, result);
         logger->add2("total covered final", total_covered);
 

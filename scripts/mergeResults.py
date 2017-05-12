@@ -25,7 +25,7 @@ def load_results(solution_dir, data_dir):
 	        j = json.load(open(filename,'r'))
 	        all_info = all_info.append(pd.Series(j),ignore_index=True)
 
-	    results = pd.merge(all_solutions, all_info, on="id")
+	    results = pd.merge(all_solutions, all_info, how="left", on="id")
 	    return results
     except Exception as e:
         print("error in ",tmp_path,e)
