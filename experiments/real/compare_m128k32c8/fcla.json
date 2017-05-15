@@ -1,0 +1,18 @@
+{"id":"149450505320606736",
+"capacity of facilities":20,
+"connectivity check time":0.293494,
+"facilities left after termination":0,
+"fcla initialization":5.66997,
+"full facilities":0,
+"fullfac":0,
+"lambda":1,
+"nullfac":1426967,
+"number of components":167592,
+"number of facilities":100,
+"number of iterations":5554,
+"objective":312264,
+"result final calculation time":1.54211,
+"runtime":22467.8,
+"total time":22475,
+"Created":"Sat May 13 02:26:55 2017"
+}
