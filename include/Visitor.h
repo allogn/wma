@@ -23,6 +23,7 @@ public:
     igraph_vector_t edge_ids;
     igraph_vector_t node_lat;
     igraph_vector_t node_lon;
+    std::vector<std::string> edge_type;
 
     Visitor() {
         igraph_vector_init(&nodes, 0);
@@ -58,6 +59,17 @@ public:
                 igraph_vector_push_back(&edges,*it);
             }
             prev = *it;
+            if (tags.find("highway") != tags.end()) {
+                edge_type.push_back(tags.at("highway"));
+            } else {
+                if (((tags.find("area") != tags.end()) && (tags.at("area") == "yes"))
+                    || (tags.find("barrier") != tags.end())
+                    || (tags.find("railway") != tags.end())) {
+                    edge_type.push_back("unrelated");
+                } else {
+                    edge_type.push_back("undefined");
+                }
+            }
         }
     }
     void relation_callback(uint64_t osmid, const Tags &tags, const References &refs){

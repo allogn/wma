@@ -71,8 +71,8 @@ public:
         VANV(&graph, "lon", &all_lon);
         double_t min_lat = static_cast<double_t>(igraph_vector_min(&all_lat));
         double_t min_lon = static_cast<double_t>(igraph_vector_min(&all_lon));
+        std::cout << min_lat << " " << min_lon << " <- delta coords" << std::endl;
 
-        //calculate new coords in parallel, hope for optimization
         for(uint64_t i = 0; i < static_cast<uint64_t >(graph_size); i++) {
             double_t lat = static_cast<double_t>(igraph_vector_e(&all_lat, i));
             double_t lon = static_cast<double_t>(igraph_vector_e(&all_lon, i));
@@ -108,6 +108,7 @@ public:
         }
     }
 
+    //saves network with random selected source nodes
     void save_network(std::string outdir, long source_num) {
         std::vector<long> weights;
         std::vector<long> indexes;
@@ -127,6 +128,40 @@ public:
         }
         Network net(&this->graph, this->weights, source_index, coords);
         net.save(outdir);
+    }
+
+    //this saves just a graph, with tagged edges. note that id is not unique and there is no sources
+    void save_with_tag(std::string outdir, long source_num) {
+
+        std::string graph_id = Network::generate_id();
+
+        std::vector<long> source_index(igraph_vcount(&graph));
+        for (long i = 0; i < source_index.size(); i++) {
+            source_index[i] = i;
+        }
+        std::random_shuffle(source_index.begin(),source_index.end());
+        source_index.resize(source_num);
+
+        std::vector<Coords> coords;
+        for(igraph_integer_t i = 0; i < igraph_vcount(&graph); i++) {
+            igraph_real_t x1 = igraph_cattribute_VAN(&graph, "X", i);
+            igraph_real_t y1 = igraph_cattribute_VAN(&graph, "Y", i);
+            coords.push_back(std::make_pair(x1,y1));
+        }
+
+        std::ofstream outf(outdir + graph_id + ".ntw",std::ios::out);
+        outf << graph_id << " "
+             << igraph_vcount(&graph) << " "
+             << igraph_ecount(&graph) << "\n";
+        for (long i = 0; i < igraph_ecount(&graph); i++) {
+            igraph_integer_t from, to;
+            igraph_edge(&graph, i, &from, &to);
+            outf << from << " " << to << " " << weights[i] << " " << v->edge_type[i] << "\n";
+        }
+        for (long i = 0; i < igraph_vcount(&graph); i++) {
+            outf << coords[i].first << " " << coords[i].second << "\n";
+        }
+        outf.close();
     }
 };
 

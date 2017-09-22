@@ -20,6 +20,14 @@ public:
     std::vector<long> source_indexes;
     std::vector<std::pair<double,double>> coords; //in case there are coordinates
 
+    static std::string generate_id() {
+        struct timespec spec;
+        clock_gettime(CLOCK_REALTIME, &spec);
+        srand (spec.tv_nsec);
+        std::string strtime = std::to_string(spec.tv_sec) + std::to_string(spec.tv_nsec);
+        return strtime.substr(0, strtime.size()-3) + std::to_string(rand() % 1000);
+    }
+
     Network(std::string filename) {
         this->load(filename);
     }
@@ -33,11 +41,7 @@ public:
         this->coords = coords;
 
         //generate unique id
-        struct timespec spec;
-        clock_gettime(CLOCK_REALTIME, &spec);
-        srand (spec.tv_nsec);
-        std::string strtime = std::to_string(spec.tv_sec) + std::to_string(spec.tv_nsec);
-        this->id = strtime.substr(0, strtime.size()-3) + std::to_string(rand() % 1000);
+        this->id = this->generate_id();
     }
     Network(igraph_t* g,
             std::vector<long>& weights,
@@ -73,9 +77,9 @@ public:
         for (long i = 0; i < source_indexes.size(); i++) {
             outf << source_indexes[i] << "\n";
         }
-	for (long i = 0; i < igraph_vcount(&graph); i++) {
-	    outf << coords[i].first << " " << coords[i].second << "\n";
-	}
+        for (long i = 0; i < igraph_vcount(&graph); i++) {
+            outf << coords[i].first << " " << coords[i].second << "\n";
+        }
         outf.close();
     }
 
