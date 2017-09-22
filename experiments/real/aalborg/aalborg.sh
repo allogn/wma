@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-
-for CUST in {10..10000..100};
+CUST=65536
+for CUSTNUM in {1..4..1};
 do
 	echo $CUST
-	../../bin/osmtontw -i ../aalborg.osm.pbf -c ${CUST} -o ./
+	CUST=$(($CUST*2))
+	../../../bin/osmtontw -i ../../../data/aalborg.osm.pbf -c ${CUST} -o ./generated/
 done

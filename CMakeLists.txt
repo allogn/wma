@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 3.7)
 project(fcla)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options")
+
+option(OSM_LIBS "Build OSM parsing libs" OFF)
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options")
 add_definitions(-D_DEBUG_=${DEBUG})
 
-#following for compiling osmtontw binary
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options -lprotobuf-lite -losmpbf -lz")
+if(OSM_LIBS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options -lprotobuf-lite -losmpbf -lz")
+else(OSM_LIBS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options")
+endif(OSM_LIBS)
 
 include_directories(${CMAKE_SOURCE_DIR}/include/)
 include_directories(${CMAKE_SOURCE_DIR}/src/)
@@ -62,7 +67,9 @@ target_link_libraries(infinite ${Boost_LIBRARIES};)
 add_executable(simple_tests tests/simple_tests.cpp)
 target_link_libraries(simple_tests ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
 
-add_executable(osmtontw osmtontw.cpp)
-target_link_libraries(osmtontw ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
+if(OSM_LIBS)
+    add_executable(osmtontw osmtontw.cpp)
+    target_link_libraries(osmtontw ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
+endif(OSM_LIBS)
 
 set (CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)

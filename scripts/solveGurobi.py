@@ -69,8 +69,7 @@ def run(network_file,facility_capacity,number_of_facilities):
         m.addConstr(quicksum(y[(i, j)] for i in range(numClients)) <= facility_capacity)
 
     # state the exact amount of facilities to be placed
-    for j in range(numFacilities):
-        m.addConstr(quicksum(x[j] for j in range(numFacilities)) == number_of_facilities)
+    m.addConstr(quicksum(x[j] for j in range(numFacilities)) == number_of_facilities)
 
     m.setObjective(quicksum(quicksum(d[(i, j)]*y[(i, j)]
                    for i in range(numClients)) for j in range(numFacilities)))
