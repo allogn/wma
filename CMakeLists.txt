@@ -1,11 +1,16 @@
 cmake_minimum_required(VERSION 3.7)
 project(fcla)
 set(CMAKE_BUILD_TYPE Debug)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options")
+
+option(OSM_LIBS "Build OSM parsing libs" OFF)
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options")
 add_definitions(-D_DEBUG_=${DEBUG})
 
-#following for compiling osmtontw binary
-#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options -lprotobuf-lite -losmpbf -lz")
+if(OSM_LIBS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options -lprotobuf-lite -losmpbf -lz")
+else(OSM_LIBS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -g -ligraph -lboost_program_options")
+endif(OSM_LIBS)
 
 include_directories(${CMAKE_SOURCE_DIR}/include/)
 include_directories(${CMAKE_SOURCE_DIR}/src/)

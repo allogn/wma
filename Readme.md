@@ -25,7 +25,7 @@ Graphs are stored in internal graph representation, called .ntw
 ```bash
 # Debug level: 0 - no checks, 1 - feasibility check, 2 - statistics output
 # If Google Protobuf is installed, use -DOSM=ON
-cmake -D DEBUG={0,1,2} -DOSM={ON,OFF} ./ 
+cmake -D DEBUG={0,1,2} -DOSM_LIBS={ON,OFF} ./ 
 ```
 
 ## Experiment setup
