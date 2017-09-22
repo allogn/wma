@@ -18,6 +18,8 @@ for f in os.listdir(path):
     count += 1
     if f[-4:] != ".ntw":
         continue
+    if f[:-4] + ".json" in os.listdir(path):
+        continue
     network = Network(os.path.join(path, f))
 
     time_start = time.time()

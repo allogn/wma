@@ -6,7 +6,7 @@ import datetime
 
 root_path = os.environ['FCLA_ROOT']
 data_path = os.environ['DATA_PATH']
-expdir = 'aalborg'
+expdir = 'pure_aalborg'
 total = len(os.listdir(path.join(data_path,'real',expdir)))
 count = 0
 for f in os.listdir(path.join(data_path,'real',expdir)):
@@ -27,9 +27,10 @@ for f in os.listdir(path.join(data_path,'real',expdir)):
         edges = int(params[2])
         vertices = int(params[1])
         sources = int(params[3])
-
-    facilities = int(sources*0.8)
-    capacity = 5
+    if (sources != 16384 and sources != 2048):
+        continue
+    facilities = int(sources*0.1)
+    capacity = 20
 
     p = subprocess.Popen([path.join(root_path,'bin','fcla'),'-i',
 			  full_target_path,

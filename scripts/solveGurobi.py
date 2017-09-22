@@ -31,7 +31,7 @@ def run(network_file,facility_capacity,number_of_facilities):
 
     m = Model()
     m.setParam('OutputFlag', False)
-    m.setParam('Threads', 1)
+    m.setParam('Threads', 8)
     # m.setParam('LogFile', 'gurobi.log')
 
     # Add variables
