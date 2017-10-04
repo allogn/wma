@@ -21,9 +21,7 @@ class Network:
         ecount = int(params[2])
         num_sources = int(params[3])
 
-        self.G = nx.Graph()
-        H = nx.path_graph(vcount)
-        self.G.add_nodes_from(H)
+        self.G = nx.empty_graph(vcount,create_using=nx.Graph())
 
         for i in range(ecount):
             edgeinfo = file.readline().split()

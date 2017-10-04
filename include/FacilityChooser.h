@@ -16,6 +16,7 @@
 #include "nheap.h"
 #include "ExploringEdgeGenerator.h"
 #include "TargetEdgeGenerator.h"
+#include "TargetExploringEdgeGenerator.h"
 #include "Matcher.h"
 #include "Network.h"
 // _define_ var inherited here
@@ -35,12 +36,17 @@ public:
     std::string exp_id;
     long facility_capacity;
     std::vector<long> source_indexes;
+    std::vector<long> target_indexes;
+    std::vector<long> target_capacities;
     State state = UNINITIALIZED;
     std::vector<long> customer_antirank;
     std::vector<long> last_used;
     double alpha;
     double gamma;
     long capacity_iteration;//iteration ID for WMA, utilized in last_used for potential facilities
+
+    bool uniform_capacities;
+    bool all_nodes_available;
 
     /*
      * lambda is a parameter that states when to terminate the heap exploration
@@ -49,6 +55,37 @@ public:
     long lambda;
 
     FacilityChooser() {}; //for testing
+
+    /*
+     * Check feasibility by number of components
+     */
+    void check_feasibility(igraph_t* g) {
+        logger->start1("connectivity check time");
+        igraph_integer_t components;
+        igraph_vector_t membership;
+        igraph_vector_init(&membership,0);
+        igraph_clusters(g, &membership, 0, &components, IGRAPH_WEAK);
+        logger->add("number of components", components);
+        std::vector<long> customers_sum(components,0);
+        for (long i = 0; i < this->source_count; i++) {
+            customers_sum[VECTOR(membership)[this->source_indexes[i]]]++;
+        }
+
+        //@todo check if faiclities avilable per component is enough to cover customers
+
+        // calculate how many min number of facilities required to cover each component, then compare with k
+        long total_facilities = 0;
+        for (long i = 0; i < components; i++) {
+            total_facilities += ceil((double) customers_sum[i] / (double) this->facility_capacity);
+        }
+        igraph_vector_destroy(&membership);
+        if (total_facilities > this->required_facilities) {
+            logger->add("error", "Problem infeasible by number of components");
+            this->state = INFEASIBLE;
+        }
+
+        logger->finish1("connectivity check time");
+    }
 
     /*
      * The matching bipartite graph has two node sets:
@@ -66,10 +103,15 @@ public:
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
         this->source_count = network.source_indexes.size();
+        this->target_capacities = network.target_capacities;
+        this->target_indexes = network.target_indexes;
         this->facility_capacity = facility_capacity;
         this->logger = logger;
         this->alpha = alpha;
         this->gamma = gamma;
+
+        this->uniform_capacities = target_capacities.size() == 0;
+        this->all_nodes_available = target_indexes.size() == 0;
 
         logger->add("id", network.id);
         logger->add("number of facilities", facilities_to_locate);
@@ -79,33 +121,14 @@ public:
         this->required_facilities = facilities_to_locate;
         this->lambda = lambda;
 
-        /*
-         * Check feasibility by number of components
-         */
-        logger->start1("connectivity check time");
-        igraph_integer_t components;
-        igraph_vector_t membership;
-        igraph_vector_init(&membership,0);
-        igraph_clusters(&(network.graph), &membership, 0, &components, IGRAPH_WEAK);
-        logger->add("number of components", components);
-        std::vector<long> customers_sum(components,0);
-        for (long i = 0; i < this->source_count; i++) {
-            customers_sum[VECTOR(membership)[this->source_indexes[i]]]++;
-        }
-        long total_facilities = 0;
-        for (long i = 0; i < components; i++) {
-            total_facilities += ceil((double) customers_sum[i] / (double) this->facility_capacity);
-        }
-        igraph_vector_destroy(&membership);
-        if (total_facilities > this->required_facilities) {
-            logger->add("error", "Problem infeasible by number of components");
-            this->state = INFEASIBLE;
-        }
-        logger->finish1("connectivity check time");
+        check_feasibility(&network.graph);
+
         //create generator anyway
-        this->edge_generator = new ExploringEdgeGenerator<long,long>(&(network.graph),
-                                                                     network.weights,
-                                                                     network.source_indexes);
+        if (this->all_nodes_available) {
+            this->edge_generator = new ExploringEdgeGenerator<long, long>(network);
+        } else {
+            this->edge_generator = new TargetExploringEdgeGenerator<long, long>(network, network.target_indexes);
+        }
         graph_size = edge_generator->n + edge_generator->m;
         this->last_used.resize(edge_generator->m, -1);
         this->customer_antirank.clear();
@@ -115,8 +138,14 @@ public:
         logger->add2("bipartite graph size", graph_size);
 
         this->node_excess.resize(graph_size,-1);
-        for (long i = network.source_indexes.size(); i < graph_size; i++) {
-            node_excess[i] = facility_capacity;
+        if (uniform_capacities) {
+            for (long i = network.source_indexes.size(); i < graph_size; i++) {
+                node_excess[i] = facility_capacity;
+            }
+        } else {
+            for (long i = network.source_indexes.size(); i < graph_size; i++) {
+                node_excess[i] = target_capacities[i-network.source_indexes.size()];
+            }
         }
 
         //reset variables of the matching algorithm
@@ -748,18 +777,18 @@ public:
         }
         logger->add1("number of iterations", capacity_iteration);
 
-        //save number of "full" facilities
-        long fullfac = 0;
-        long nullfac = 0;
-        for (long i = this->source_indexes.size(); i < graph_size; i++) {
-            fullfac += (node_excess[i] == 0);
-            nullfac += (node_excess[i] == facility_capacity);
-        }
-        logger->add1("fullfac", fullfac);
-        logger->add1("nullfac", nullfac);
+        //save number of "full" facilities @todo implement using capacity vector
+//        long fullfac = 0;
+//        long nullfac = 0;
+//        for (long i = this->source_indexes.size(); i < graph_size; i++) {
+//            fullfac += (node_excess[i] == 0);
+//            nullfac += (node_excess[i] == facility_capacity);
+//        }
+//        logger->add1("fullfac", fullfac);
+//        logger->add1("nullfac", nullfac);
 
         /*
-         * we place "free" facilities right near the customers with "farthest" matching
+         * we place "free" facilities right near the customers with "furthest" matching
          * so in calculateResult function we must recalculate distances
          */
         logger->add1("facilities left after termination", (long)(required_facilities - this->result.size()));
@@ -836,7 +865,16 @@ public:
         //build valid bipartite graph : reverse all edges to the direct position
         //create an edge generator with calculated distances between known facilities and customers
         //run new matcher
-        std::vector<long> new_excess(this->source_indexes.size() + this->result.size(),this->facility_capacity);
+        std::vector<long> new_excess(this->source_indexes.size() + this->result.size());
+        if (this->uniform_capacities) {
+            std::fill(new_excess.begin(), new_excess.end(), this->facility_capacity);
+        } else {
+            for (long i = source_indexes.size(); i < new_excess.size(); i++) {
+                new_excess[i] = this->target_capacities[i-source_indexes.size()];
+            }
+        }
+
+
         for (long i = 0; i < this->source_indexes.size(); i++) {
             new_excess[i] = -1;
         }

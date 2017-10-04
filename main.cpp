@@ -23,11 +23,13 @@ int main(int argc, const char** argv) {
     double alpha;
     long gamma;
     string out_filename;
+    string facilityfilename;
 
     po::options_description desc("Allowed options");
     desc.add_options()
             ("help,h", "produce help message")
             ("input,i", po::value<string>(&filename)->required(), "Input file, a network")
+            ("facilityfile,f", po::value<string>(&facilityfilename)->default_value(""), "List of potential facilities")
             ("facilities,n", po::value<long>(&facilities_to_locate)->required(), "Facilities to locate")
             ("faccap,c", po::value<long>(&facility_capacity)->default_value(1), "Capacity of facilities")
             ("lambda,l", po::value<long>(&lambda)->default_value(0), "Parameter lambda, set cover oversize")
@@ -46,7 +48,7 @@ int main(int argc, const char** argv) {
     Logger logger;
     logger.start("total time");
     logger.start2("reading file");
-    Network net(filename);
+    Network net(filename, facilityfilename);
     logger.finish2("reading file");
 
     FacilityChooser fcla(net, facilities_to_locate, facility_capacity, &logger, lambda, alpha, gamma);

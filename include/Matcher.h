@@ -405,9 +405,13 @@ public:
         I source_id = 0;
         I prev_id = -1;
         //round-robin
+        long flowChangePerCycle = 0;
         while (source_id != prev_id) {
-            while (node_excess[source_id] < 0) {
+            while (node_excess[source_id] < 0) { //match source_id while there is any negative excess
                 matchVertex(source_id);
+//                if (matchVertex(source_id) == 0) {
+//                    throw "Unfeasible problem: not enough facilities/customers";
+//                }
                 prev_id = source_id;
             }
             source_id = (source_id+1) % source_count;

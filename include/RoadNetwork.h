@@ -22,6 +22,7 @@ public:
 
     igraph_t graph;
     std::vector<long> weights;
+    std::vector<Tags> node_tags;
     Visitor* v;
 
     RoadNetwork() {
@@ -42,6 +43,7 @@ public:
         v = new Visitor();
         read_osm_pbf(path, *v);
         v->set_graph(&graph);
+        this->node_tags = v->node_tags;
     }
 
     //get euclidean coordinates out of
@@ -130,6 +132,13 @@ public:
         net.save(outdir);
     }
 
+    std::string merge_tags(Tags tags) {
+        std::ostringstream os;
+        for (Tags::iterator it=tags.begin(); it!=tags.end(); ++it)
+            os << it->first << "::" << it->second << ";;";
+        return os.str();
+    }
+
     //this saves just a graph, with tagged edges. note that id is not unique and there is no sources
     void save_with_tag(std::string outdir, long source_num) {
 
@@ -159,7 +168,7 @@ public:
             outf << from << " " << to << " " << weights[i] << " " << v->edge_type[i] << "\n";
         }
         for (long i = 0; i < igraph_vcount(&graph); i++) {
-            outf << coords[i].first << " " << coords[i].second << "\n";
+            outf << coords[i].first << " " << coords[i].second << " " << merge_tags(node_tags[i]) << "\n";
         }
         outf.close();
     }

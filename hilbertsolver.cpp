@@ -82,11 +82,13 @@ int main(int argc, const char** argv) {
     long facilities_to_locate;
     long facility_capacity;
     string out_filename;
+    string facilityfile;
 
     po::options_description desc("Allowed options");
     desc.add_options()
             ("help,h", "produce help message")
             ("input,i", po::value<string>(&filename)->required(), "Input file, a network")
+            ("facilityfile,f", po::value<string>(&facilityfile)->default_value(""), "File with a list of facilities")
             ("facilities,n", po::value<long>(&facilities_to_locate)->required(), "Facilities to locate")
             ("faccap,c", po::value<long>(&facility_capacity)->default_value(1), "Capacity of facilities")
             ("output,o", po::value<string>(&out_filename)->required(), "Output file");
@@ -101,7 +103,7 @@ int main(int argc, const char** argv) {
 
     Logger logger;
     logger.start("total time");
-    Network net(filename);
+    Network net(filename,facilityfile);
 
     //sort by hilbert, cluster by customers equally and compute a node that is the closest to the center of a cluster
     logger.start("runtime");
@@ -155,6 +157,20 @@ int main(int argc, const char** argv) {
         }
         cur_clust = (++cur_clust == components) ? 0 : cur_clust;
     }
+
+    //@todo IMPORTANT
+    if (components > 1 && facilityfile != "") {
+        cout << "Not implemented" << endl;
+    }
+    if (facilityfile != "") {
+        std::vector<bool> if_facility(igraph_vcount(&net.graph), false);
+        for (long i = 0; i < net.target_indexes.size(); i++) {
+            if_facility[net.target_indexes[i]] = true;
+        }
+    }
+    //@todo change uniform capacities
+
+
     for (long component_id = 0; component_id < components; component_id++) {
         long facilities_per_cluster = facility_per_component[component_id];
         if (facilities_per_cluster > 0) {

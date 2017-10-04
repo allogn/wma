@@ -23,6 +23,7 @@ public:
     igraph_vector_t edge_ids;
     igraph_vector_t node_lat;
     igraph_vector_t node_lon;
+    std::vector<Tags> node_tags;
     std::vector<std::string> edge_type;
 
     Visitor() {
@@ -45,6 +46,7 @@ public:
         igraph_vector_push_back(&nodes, osmid);
         igraph_vector_push_back(&node_lat, lat);
         igraph_vector_push_back(&node_lon, lon);
+        node_tags.push_back(tags);
     }
     void way_callback(uint64_t osmid, const Tags &tags, const std::vector<uint64_t> &refs){
         //add edge along the way and add ID of the way for each added edge

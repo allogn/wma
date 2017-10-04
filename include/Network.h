@@ -18,6 +18,8 @@ public:
     std::string id;
     std::vector<long> weights;
     std::vector<long> source_indexes;
+    std::vector<long> target_indexes;
+    std::vector<long> target_capacities;
     std::vector<std::pair<double,double>> coords; //in case there are coordinates
 
     static std::string generate_id() {
@@ -28,8 +30,8 @@ public:
         return strtime.substr(0, strtime.size()-3) + std::to_string(rand() % 1000);
     }
 
-    Network(std::string filename) {
-        this->load(filename);
+    Network(std::string filename, std::string facilityfilename = "") {
+        this->load(filename, facilityfilename);
     }
     Network(igraph_t* g,
             std::vector<long>& weights,
@@ -88,7 +90,7 @@ public:
         this->save(dir, filename);
     }
 
-    void load(std::string filename) {
+    void load(std::string filename, std::string target_list_filename = "") {
         std::ifstream infile(filename, std::ios::in);
         if (!infile) {
             throw std::string("Input file does not exist");
@@ -131,6 +133,24 @@ public:
 //            }
 //        }
         igraph_vector_destroy(&edges);
+
+        if (target_list_filename != "") {
+            std::ifstream target_list_file(target_list_filename, std::ios::in);
+            if (!infile) {
+                throw std::string("Input file with targets does not exist");
+            }
+            long nodeid, capacity;
+            while (target_list_file >> nodeid >> capacity) {
+                target_indexes.push_back(nodeid);
+                target_capacities.push_back(capacity);
+            }
+        } else {
+            target_indexes.clear();
+            for (long i = 0; i < vcount; i++) {
+                target_indexes.push_back(i);
+            }
+            target_capacities.clear();
+        }
     }
 };
 
