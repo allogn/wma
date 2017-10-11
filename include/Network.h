@@ -5,6 +5,7 @@
 #ifndef FCLA_NETWORK_H
 #define FCLA_NETWORK_H
 
+#include <unistd.h>
 #include <string>
 #include <igraph/igraph.h>
 #include <vector>
@@ -135,15 +136,17 @@ public:
         igraph_vector_destroy(&edges);
 
         if (target_list_filename != "") {
-            std::ifstream target_list_file(target_list_filename, std::ios::in);
-            if (!infile) {
-                throw std::string("Input file with targets does not exist");
-            }
+	    std::ifstream target_list_file(target_list_filename.c_str());
+           //@todo wtf check for a file does not work 
             long nodeid, capacity;
-            while (target_list_file >> nodeid >> capacity) {
+	    while (target_list_file >> nodeid >> capacity) {
                 target_indexes.push_back(nodeid);
                 target_capacities.push_back(capacity);
             }
+	    if (target_capacities.size() == 0) {
+		std::cout << "Error file with potential facilities is empty" << std::endl;
+		//throw std::string("File with potential facilities is empty");
+	    }
         } else {
             target_indexes.clear();
             for (long i = 0; i < vcount; i++) {

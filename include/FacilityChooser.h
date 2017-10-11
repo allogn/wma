@@ -117,6 +117,7 @@ public:
         logger->add("number of facilities", facilities_to_locate);
         logger->add("capacity of facilities", facility_capacity);
         logger->add("lambda", lambda);
+	logger->add("uniform capacities", this->uniform_capacities);
 
         this->required_facilities = facilities_to_locate;
         this->lambda = lambda;
