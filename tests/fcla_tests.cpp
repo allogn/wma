@@ -3,13 +3,16 @@
 //
 
 #define BOOST_TEST_MODULE fcla_tests
-#include <boost/test/included/unit_test.hpp>
+#define BOOST_TEST_DYN_LINK
+#include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include "EdgeGenerator.h"
 #include "helpers.h"
 #include "ExploringEdgeGenerator.h"
 #include "Network.h"
 #include "FacilityChooser.h"
 #include "Logger.h"
+#include "exceptions.h"
 
 BOOST_AUTO_TEST_CASE (testExplorator) {
     //generate random graph, calculate all-to-all distances and compare them with ExploringGenerator results.
@@ -18,7 +21,7 @@ BOOST_AUTO_TEST_CASE (testExplorator) {
     igraph_vector_t x, y;
     long vsize = 100;
     generate_random_geometric_graph(vsize,0.1,&graph,weights,&x,&y);
-//    print_graph(&graph, weights, weights);
+
     igraph_vector_t real_weights;
     igraph_vector_init(&real_weights, igraph_ecount(&graph));
     for (long i = 0 ; i < weights.size(); i++)
@@ -83,8 +86,37 @@ BOOST_AUTO_TEST_CASE (testDuple) {
     Network net(&graph, weights, sources);
     Logger logger;
     FacilityChooser fcla(net, 1, 2, &logger);
-    fcla.locateFacilities();
-    fcla.calculateResult();
+
+    fcla.match();
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(fcla.get_bi_node_id_by_target_node_id(0)), 1);
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(fcla.get_bi_node_id_by_target_node_id(4)), 1);
+    for (int i = 1; i < 4; i++)
+        BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(fcla.get_bi_node_id_by_target_node_id(i)), 0);
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(0), 0);
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(1), 0);
+
+    std::vector<int> complete_sources(2, 0);
+    BOOST_CHECK(!fcla.findSetCover());
+    BOOST_CHECK(fcla.increaseCapacities(complete_sources));
+    BOOST_CHECK(!fcla.findSetCover());
+    BOOST_CHECK(fcla.increaseCapacities(complete_sources));
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(fcla.get_bi_node_id_by_target_node_id(2)), 0);
+    for (int i = 0; i < 5; i++)
+        if (i != 2) BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(fcla.get_bi_node_id_by_target_node_id(i)), 1);
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(0), 0);
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(1), 0);
+
+    BOOST_CHECK(!fcla.findSetCover());
+    BOOST_CHECK(fcla.increaseCapacities(complete_sources));
+    BOOST_CHECK(!fcla.findSetCover());
+    BOOST_CHECK(fcla.increaseCapacities(complete_sources));
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(fcla.get_bi_node_id_by_target_node_id(2)), 2);
+    for (int i = 0; i < 5; i++)
+        if (i != 2) BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(fcla.get_bi_node_id_by_target_node_id(i)), 1);
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(0), 0);
+    BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(1), 0);
+    BOOST_CHECK(fcla.findSetCover());
+
     BOOST_CHECK_EQUAL(fcla.result.size(), 1);
     BOOST_CHECK_EQUAL(fcla.result[0], 2);
     igraph_destroy(&graph);
@@ -122,84 +154,7 @@ BOOST_AUTO_TEST_CASE (test3Tripple) {
     igraph_destroy(&graph);
 }
 
-BOOST_AUTO_TEST_CASE (testSetCovers) {
-    
-    /*
-     * 0 - 5,6,9
-     * 1 - 5,7,9
-     * 2 - 5,8,6
-     * 3 - 5,6,9
-     * 4 - 5,6,8
-     */
-    FacilityChooser fcla;
-    Logger logger;
-    fcla.logger = &logger;
-    fcla.edge_generator = new RandomEdgeGenerator(1,0,1,1); //dump value for fcla destructor
-    fcla.source_count = 5;
-    fcla.required_facilities = 5;
-    fcla.edges.resize(10);
-    fcla.edges[5].push_front(std::make_pair<long,long>(0, 1));
-    fcla.edges[5].push_front(std::make_pair<long,long>(1, 1));
-    fcla.edges[5].push_front(std::make_pair<long,long>(2, 1));
-    fcla.edges[5].push_front(std::make_pair<long,long>(3, 1));
-    fcla.edges[5].push_front(std::make_pair<long,long>(4, 1));
-    fcla.edges[6].push_front(std::make_pair<long,long>(0, 1));
-    fcla.edges[6].push_front(std::make_pair<long,long>(3, 1));
-    fcla.edges[6].push_front(std::make_pair<long,long>(4, 1));
-    fcla.edges[6].push_front(std::make_pair<long,long>(2, 1));
-    fcla.edges[7].push_front(std::make_pair<long,long>(1, 1));
-    fcla.edges[8].push_front(std::make_pair<long,long>(2, 1));
-    fcla.edges[8].push_front(std::make_pair<long,long>(4, 1));
-    fcla.edges[9].push_front(std::make_pair<long,long>(0, 1));
-    fcla.edges[9].push_front(std::make_pair<long,long>(1, 1));
-    fcla.edges[9].push_front(std::make_pair<long,long>(3, 1));
-    
-    std::vector<long> faccand1({0});
-    std::vector<long> faccand2({4,3});
-    std::vector<long> faccand3({2,1});
-    std::vector<long> faccand4({0,1});
-    std::vector<long> faccand5({4,1});
-    std::vector<long> faccand6({0,1,2,3,4});
-
-    std::vector<long> faccand7({});
-    std::vector<long> faccand8({2});
-    std::vector<long> faccand9({2,3});
-    std::vector<long> faccand10({2,4});
-    std::vector<long> faccand11({4});
-    std::vector<long> faccand12({1});
-
-    BOOST_CHECK(fcla.treeCover(faccand1));
-    BOOST_CHECK(fcla.treeCover(faccand2));
-    BOOST_CHECK(fcla.treeCover(faccand3));
-    BOOST_CHECK(fcla.treeCover(faccand4));
-    BOOST_CHECK(fcla.treeCover(faccand5));
-    BOOST_CHECK(fcla.treeCover(faccand6));
-
-    BOOST_CHECK(!fcla.treeCover(faccand7));
-    BOOST_CHECK(!fcla.treeCover(faccand8));
-    BOOST_CHECK(!fcla.treeCover(faccand9));
-    BOOST_CHECK(!fcla.treeCover(faccand10));
-    BOOST_CHECK(!fcla.treeCover(faccand11));
-    BOOST_CHECK(!fcla.treeCover(faccand12));
-    
-    fcla.required_facilities = 1;
-    BOOST_CHECK(fcla.treeCover(faccand1));
-    BOOST_CHECK(!fcla.treeCover(faccand2));
-    BOOST_CHECK(!fcla.treeCover(faccand3));
-    BOOST_CHECK(fcla.treeCover(faccand4));
-    BOOST_CHECK(!fcla.treeCover(faccand5));
-    BOOST_CHECK(!fcla.treeCover(faccand6));
-
-    fcla.required_facilities = 2;
-    BOOST_CHECK(fcla.treeCover(faccand2));
-    BOOST_CHECK(!fcla.treeCover(faccand9));
-}
-
-/*
- * test cases for gamma
- */
-
-BOOST_AUTO_TEST_CASE (test3TrippleGamma1) {
+BOOST_AUTO_TEST_CASE (test3TrippleGreedy) {
     igraph_t graph;
     std::vector<long> edges = {0,1,1,2,3,4,4,2,5,6,6,2};
     std::vector<long> weights = {1,2,3,4,5,6};
@@ -207,7 +162,8 @@ BOOST_AUTO_TEST_CASE (test3TrippleGamma1) {
     create_graph(&graph, 7, edges);
     Network net(&graph, weights, sources);
     Logger logger;
-    FacilityChooser fcla(net, 2, 2, &logger, 0, 1, 1);
+    FacilityChooser fcla(net, 2, 2, &logger);
+    fcla.greedyMatching = true;
     fcla.locateFacilities();
     fcla.calculateResult();
     BOOST_CHECK_EQUAL(fcla.result.size(), 2);
@@ -215,36 +171,87 @@ BOOST_AUTO_TEST_CASE (test3TrippleGamma1) {
     igraph_destroy(&graph);
 }
 
+void compare_edges(std::pair<long, long>& e1, std::pair<long,long>& e2) {
+    BOOST_CHECK_EQUAL(e1.first, e2.first);
+    BOOST_CHECK_EQUAL(e1.second, e2.second);
+}
 
-BOOST_AUTO_TEST_CASE (test3TrippleGamma2) {
+BOOST_AUTO_TEST_CASE (gridGraphWithTiedPotentialFacilitiesAndMulticapacity) {
+    std::vector<long> edges = {0,3,0,1,1,4,1,2,2,5,3,6,3,4,4,7,4,5,5,8,6,7,7,8,9,10,10,11,0,12};
+    std::vector<long> weights = {6,1,2,12,13,30,7,20,3,4,11,5,30,40,0};
+    std::vector<long> sources = {0,10,12};
+    std::vector<long> targets = {7,5,9};
+    long graph_size = 13;
+
     igraph_t graph;
-    std::vector<long> edges = {0,1,1,2,3,4,4,2,5,6,6,2};
-    std::vector<long> weights = {1,2,3,4,5,6};
-    std::vector<long> sources = {0,3,5};
-    create_graph(&graph, 7, edges);
+    create_graph(&graph, graph_size, edges);
     Network net(&graph, weights, sources);
+    net.set_target_indexes(targets, 1);
     Logger logger;
-    FacilityChooser fcla(net, 2, 2, &logger, 0, 1, 2);
+    FacilityChooser fcla(net, 3, 0, &logger);
     fcla.locateFacilities();
-    fcla.calculateResult();
-    BOOST_CHECK_EQUAL(fcla.result.size(), 2);
-    BOOST_CHECK((fcla.result[0] == 2) || (fcla.result[1] == 2));
+
+    for (int i = 3; i < 6; i++) {
+        BOOST_CHECK_EQUAL(fcla.get_bi_outdegree(i), 1);
+    }
+    BOOST_CHECK_EQUAL(fcla.get_bi_node_id_by_target_node_id(5), 4);
+    BOOST_CHECK_EQUAL(fcla.edges.size(),7); //bug? extra node?
+
+    std::pair<long,long> e1(fcla.get_source_id_by_node_id(0), -6);
+    compare_edges(fcla.edges[fcla.get_bi_node_id_by_target_node_id(5)].front(), e1);
+    std::pair<long,long> e2(fcla.get_source_id_by_node_id(12), -15);
+    compare_edges(fcla.edges[fcla.get_bi_node_id_by_target_node_id(7)].front(), e2);
+    std::pair<long,long> e3(fcla.get_source_id_by_node_id(10), -30);
+    compare_edges(fcla.edges[fcla.get_bi_node_id_by_target_node_id(9)].front(), e3);
+
+    TargetExploringEdgeGenerator<long, long> bigraph_generator(*fcla.network, targets);
+    std::vector<long> excess({-1,-1,-1,1,1,1});
+    Matcher<long,long,long> M(&bigraph_generator, excess, &logger);
+    M.match();
+    BOOST_CHECK_EQUAL(M.edges.size(),7); //one goes for an extra node (excess)
+    for (int i = 3; i < 6; i++) {
+        BOOST_CHECK_EQUAL(M.get_bi_outdegree(i), 1);
+    }
+    BOOST_CHECK_EQUAL(M.get_bi_outdegree(6), 0);
+
+    std::pair<long,long> e11(fcla.get_source_id_by_node_id(0), -6);
+    compare_edges(M.edges[fcla.get_bi_node_id_by_target_node_id(5)].front(), e11);
+    std::pair<long,long> e22(fcla.get_source_id_by_node_id(12), -15);
+    compare_edges(M.edges[fcla.get_bi_node_id_by_target_node_id(7)].front(), e22);
+    std::pair<long,long> e33(fcla.get_source_id_by_node_id(10), -30);
+    compare_edges(M.edges[fcla.get_bi_node_id_by_target_node_id(9)].front(), e33);
+    M.calculateResult();
+    BOOST_CHECK_EQUAL(M.result_weight, 51);
+
+    double objective = fcla.calculateResult();
+    std::vector<long> result = fcla.get_chosen_facility_node_ids();
+    BOOST_CHECK_EQUAL(result.size(), 3);
+    std::sort(result.begin(), result.end());
+    std::vector<long> ans = {5,7,9};
+    BOOST_CHECK_EQUAL_COLLECTIONS(result.begin(), result.end(), ans.begin(), ans.end());
+    BOOST_CHECK_EQUAL(objective, 51);
     igraph_destroy(&graph);
 }
 
+BOOST_AUTO_TEST_CASE (lonelyCustomerInTwoComponentGraphExceptionExpected) {
+    std::vector<long> edges = {0,1,0,2,2,3,1,3};
+    std::vector<long> weights(4, 1);
+    std::vector<long> sources = {0,4};
+    std::vector<long> targets = {1,2};
+    std::vector<long> result = {0,1};
 
-BOOST_AUTO_TEST_CASE (test3TrippleGamma3) {
     igraph_t graph;
-    std::vector<long> edges = {0,1,1,2,3,4,4,2,5,6,6,2};
-    std::vector<long> weights = {1,2,3,4,5,6};
-    std::vector<long> sources = {0,3,5};
-    create_graph(&graph, 7, edges);
+    create_graph(&graph, 5, edges);
     Network net(&graph, weights, sources);
+    net.set_target_indexes(targets, 2);
     Logger logger;
-    FacilityChooser fcla(net, 2, 2, &logger, 0, 1, 3);
-    fcla.locateFacilities();
-    fcla.calculateResult();
-    BOOST_CHECK_EQUAL(fcla.result.size(), 2);
-    BOOST_CHECK((fcla.result[0] == 2) || (fcla.result[1] == 2));
-    igraph_destroy(&graph);
+
+    FacilityChooser fcla(net, 2, 1, &logger);
+    //BOOST_CHECK_THROW(fcla.check_feasibility(), InfeasibleSourceAssignmentException); facility indexes check is not implemented, only in gurobi
+    fcla.result = result;
+    fcla.state = FacilityChooser::State::LOCATED;
+    BOOST_CHECK_THROW(fcla.calculateResult(), std::logic_error); //don't allow to compute objective on incorrect result
+
+    FacilityChooser fcla2(net, 2, 1, &logger);
+    BOOST_CHECK_THROW(fcla2.locateFacilities(), NoMoreCapacitiesToIncrease);
 }

@@ -11,6 +11,7 @@
 #include <set>
 #include <algorithm>
 #include <iostream>
+#include <fstream>
 
 typedef struct {
     bool exists; //flag if there is any new edge to be added

@@ -3,3 +3,5 @@ lib
 bin
 data
 temp
+gurobi.log
+.DS_Store

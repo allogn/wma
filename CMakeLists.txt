@@ -16,10 +16,10 @@ include_directories(${CMAKE_SOURCE_DIR}/include/)
 include_directories(${CMAKE_SOURCE_DIR}/src/)
 
 # BOOST libraries
-find_package(Boost REQUIRED)
+find_package(Boost COMPONENTS program_options unit_test_framework)
 set(Boost_USE_STATIC_LIBS ON)
-find_package( Boost COMPONENTS program_options REQUIRED )
-include_directories(${Boost_INCLUDE_DIR})
+set(Boost_USE_MULTITHREAD ON)
+include_directories(${Boost_INCLUDE_DIRS})
 
 #set (Boost_USE_STATIC_LIBS OFF) # enable dynamic linking
 #set (Boost_USE_MULTITHREAD ON)  # enable multithreading
@@ -45,27 +45,20 @@ file(GLOB TEST_SOURCE_FILES tests/*.cpp)
 file(GLOB SIA_TEST_SOURCE_FILES tests/*.cpp)
 
 add_executable(fcla main.cpp ${SOURCE_FILES};)
-target_link_libraries(fcla ${Boost_LIBRARIES};${IGRAPH_LIBS})
+target_link_libraries(fcla ${Boost_PROGRAM_OPTIONS_LIBRARY};${IGRAPH_LIBS})
+add_executable(nlrsolver nlrsolver.cpp ${SOURCE_FILES};)
+target_link_libraries(nlrsolver ${Boost_PROGRAM_OPTIONS_LIBRARY};${IGRAPH_LIBS})
 add_executable(generator generator.cpp ${SOURCE_FILES};)
-target_link_libraries(generator ${Boost_LIBRARIES};${IGRAPH_LIBS})
+target_link_libraries(generator ${Boost_PROGRAM_OPTIONS_LIBRARY};${IGRAPH_LIBS})
 
 add_executable(brutesolver brutesolver.cpp)
-target_link_libraries(brutesolver ${Boost_LIBRARIES};${IGRAPH_LIBS})
+target_link_libraries(brutesolver ${Boost_PROGRAM_OPTIONS_LIBRARY};${IGRAPH_LIBS})
 
 add_executable(hilbertsolver hilbertsolver.cpp ${SOURCE_FILES})
-target_link_libraries(hilbertsolver ${Boost_LIBRARIES};${IGRAPH_LIBS};)
-
-add_executable(SIA_tests tests/SIA_tests.cpp)
-target_link_libraries(SIA_tests ${Boost_LIBRARIES};)
+target_link_libraries(hilbertsolver ${Boost_PROGRAM_OPTIONS_LIBRARY};${IGRAPH_LIBS};)
 
 add_executable(fcla_tests tests/fcla_tests.cpp)
-target_link_libraries(fcla_tests ${Boost_LIBRARIES};)
-
-add_executable(infinite tests/infinite_tests.cpp)
-target_link_libraries(infinite ${Boost_LIBRARIES};)
-
-add_executable(simple_tests tests/simple_tests.cpp)
-target_link_libraries(simple_tests ${Boost_LIBRARIES};${ZLIB_LIBRARIES};${PROTOBUF_LIBRARY})
+target_link_libraries(fcla_tests ${Boost_UNIT_TEST_FRAMEWORK_LIBRARY};)
 
 if(OSM_LIBS)
     add_executable(osmtontw osmtontw.cpp)

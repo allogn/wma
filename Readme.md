@@ -6,7 +6,7 @@ Algorithm for large-scale approximate capacitated facility location. Locates a s
 
 - https://github.com/scrosby/OSM-binary and Google Protobuf (see C++ docs in github) for OSM parsing (osmtontw), can be swiched off by passing a parameter -DOSM to cmake
 - http://lemon.cs.elte.hu/trac/lemon/wiki/Downloads
-- libigraph*
+- libigraph\*
 
 For experimental evaluation, Gurobi is used as a convex solver. Scripts folder contain a script for running Gurobi for all graphs in particular folder.
 - gurobi python solver + gurobi itself

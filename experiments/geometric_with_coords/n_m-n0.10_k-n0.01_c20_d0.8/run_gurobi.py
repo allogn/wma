@@ -28,8 +28,8 @@ for f in os.listdir(path.join(data_path,'geometric_with_coords',expdir)):
         vertices = int(params[1])
         sources = int(params[3])
 
-    if (vertices > 10000):
-        continue
+   # if (vertices > 10000):
+    #    continue
 
     facilities = int(sources/2)
     capacity = 10

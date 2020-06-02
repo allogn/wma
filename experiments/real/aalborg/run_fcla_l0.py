@@ -27,8 +27,8 @@ for f in os.listdir(path.join(data_path,'real',expdir)):
         edges = int(params[2])
         vertices = int(params[1])
         sources = int(params[3])
-    if (sources != 16384 and sources != 2048):
-        continue
+    #if (sources != 16384 and sources != 2048):
+     #   continue
     facilities = int(sources*0.1)
     capacity = 20
 
@@ -36,7 +36,6 @@ for f in os.listdir(path.join(data_path,'real',expdir)):
 			  full_target_path,
 			  '-c',str(capacity),
 			  '-n',str(facilities),
-                          '-g','0',
 			  '-o',path.join(data_path,'real',expdir,'solutions','fcla_l0',id + "fac" + str(facilities) + ".json")],
 			  stdout=subprocess.PIPE,
 			  stderr=subprocess.PIPE)

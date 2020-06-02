@@ -9,6 +9,7 @@
 #include <iostream>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <random>
 #include <igraph/igraph.h>
 #include <lemon/list_graph.h>
 
@@ -146,6 +147,15 @@ void create_graph(igraph_t* graph, long size, std::vector<long>& edges, bool dir
     }
     igraph_vector_view(&v, real_edges, sizeof(real_edges)/sizeof(double));
     igraph_create(graph, &v, size, IGRAPH_UNDIRECTED);
+}
+
+long randint(long min, long max) {
+    std::random_device rd;     // only used once to initialise (seed) engine
+    std::mt19937 rng(rd());    // random-number engine used (Mersenne-Twister in this case)
+    std::uniform_int_distribution<int> uni(min,max); // guaranteed unbiased
+
+    auto random_integer = uni(rng);
+    return random_integer;
 }
 
 #endif //FCLA_HELPERS_H

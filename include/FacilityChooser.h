@@ -1,11 +1,12 @@
 /*
-* 5 levels of debug is supported
-* 0 : no any checking or stats at all
-* 1 : input feasibility check and basic stats
-* 2 : advanced stats included (nested)
-* 3 : debug info included
-* 4 : everything else included
-*/
+ * Potential bugs/improvements:
+ *
+ * graph_size is defined as n+m in fcla, but n+m+1 in matcher (extra node), that is inconsistent.
+ *
+ *
+ *
+ */
+
 
 #ifndef FCLA_FACILITYCHOOSER_H
 #define FCLA_FACILITYCHOOSER_H
@@ -15,14 +16,13 @@
 #include <stack>
 #include "nheap.h"
 #include "ExploringEdgeGenerator.h"
-#include "TargetEdgeGenerator.h"
 #include "TargetExploringEdgeGenerator.h"
 #include "Matcher.h"
 #include "Network.h"
-// _define_ var inherited here
 #include "Logger.h"
 #include "helpers.h"
 #include "FacilityRank.h"
+#include "exceptions.h"
 
 class FacilityChooser : public Matcher<long,long,long> {
 public:
@@ -36,17 +36,21 @@ public:
     std::string exp_id;
     long facility_capacity;
     std::vector<long> source_indexes;
+    std::map<long, long> source_reverse_index;
     std::vector<long> target_indexes;
     std::vector<long> target_capacities;
     State state = UNINITIALIZED;
-    std::vector<long> customer_antirank;
+    std::vector<long> customer_antirank; //number of facilities a customer is
     std::vector<long> last_used;
     double alpha;
-    double gamma;
     long capacity_iteration;//iteration ID for WMA, utilized in last_used for potential facilities
+    long total_covered;
 
     bool uniform_capacities;
+    bool partially_uniform; //used to calculate objective for uniform, but result for non-uniform
     bool all_nodes_available;
+
+    int objective_matching = 1; //if objective is calculated as SIA
 
     /*
      * lambda is a parameter that states when to terminate the heap exploration
@@ -59,8 +63,8 @@ public:
     /*
      * Check feasibility by number of components
      */
-    void check_feasibility(igraph_t* g) {
-        logger->start1("connectivity check time");
+    void check_feasibility() {
+        igraph_t* g = &(network->graph);
         igraph_integer_t components;
         igraph_vector_t membership;
         igraph_vector_init(&membership,0);
@@ -70,21 +74,21 @@ public:
         for (long i = 0; i < this->source_count; i++) {
             customers_sum[VECTOR(membership)[this->source_indexes[i]]]++;
         }
-
-        //@todo check if faiclities avilable per component is enough to cover customers
-
-        // calculate how many min number of facilities required to cover each component, then compare with k
+        //todo nonequal capacities
         long total_facilities = 0;
         for (long i = 0; i < components; i++) {
             total_facilities += ceil((double) customers_sum[i] / (double) this->facility_capacity);
         }
+
         igraph_vector_destroy(&membership);
         if (total_facilities > this->required_facilities) {
-            logger->add("error", "Problem infeasible by number of components");
-            this->state = INFEASIBLE;
+            throw infeasible_solution;
         }
 
-        logger->finish1("connectivity check time");
+        if ((this->uniform_capacities) && (this->required_facilities * this->facility_capacity < source_count)) {
+            throw infeasible_solution;
+        }
+        //@todo add check of facility_indexes
     }
 
     /*
@@ -98,17 +102,21 @@ public:
                     Logger* logger,
                     long lambda = 0,
                     double alpha = 1,
-                    double gamma = 0) {
+                    bool partially_uniform = false) {
         logger->start2("fcla initialization");
+        this->network = &network;
         this->exp_id = network.id;
         this->source_indexes = network.source_indexes;
         this->source_count = network.source_indexes.size();
-        this->target_capacities = network.target_capacities;
+        this->target_capacities = network.target_capacities; //can be empty
         this->target_indexes = network.target_indexes;
         this->facility_capacity = facility_capacity;
         this->logger = logger;
         this->alpha = alpha;
-        this->gamma = gamma;
+        this->required_facilities = facilities_to_locate;
+        this->lambda = lambda;
+        this->state = NOT_LOCATED;
+        this->partially_uniform = partially_uniform; //false default
 
         this->uniform_capacities = target_capacities.size() == 0;
         this->all_nodes_available = target_indexes.size() == 0;
@@ -117,12 +125,7 @@ public:
         logger->add("number of facilities", facilities_to_locate);
         logger->add("capacity of facilities", facility_capacity);
         logger->add("lambda", lambda);
-	logger->add("uniform capacities", this->uniform_capacities);
-
-        this->required_facilities = facilities_to_locate;
-        this->lambda = lambda;
-
-        check_feasibility(&network.graph);
+	    logger->add("uniform capacities", this->uniform_capacities);
 
         //create generator anyway
         if (this->all_nodes_available) {
@@ -130,28 +133,19 @@ public:
         } else {
             this->edge_generator = new TargetExploringEdgeGenerator<long, long>(network, network.target_indexes);
         }
-        graph_size = edge_generator->n + edge_generator->m;
+        graph_size = edge_generator->n + edge_generator->m + 1;
         this->last_used.resize(edge_generator->m, -1);
         this->customer_antirank.clear();
         this->customer_antirank.resize(source_count);
+        this->build_source_reverse_index();
 
-        //for Matching Algorithm (base class)
-        logger->add2("bipartite graph size", graph_size);
+        logger->add("bipartite graph size", graph_size);
 
-        this->node_excess.resize(graph_size,-1);
-        if (uniform_capacities) {
-            for (long i = network.source_indexes.size(); i < graph_size; i++) {
-                node_excess[i] = facility_capacity;
-            }
-        } else {
-            for (long i = network.source_indexes.size(); i < graph_size; i++) {
-                node_excess[i] = target_capacities[i-network.source_indexes.size()];
-            }
-        }
+        this->node_excess = this->get_node_excess();
+        this->full_node_excess = this->get_node_excess();
 
         //reset variables of the matching algorithm
         reset();
-        if (this->state != INFEASIBLE) this->state = NOT_LOCATED;
         logger->finish("fcla initialization");
     }
 
@@ -159,503 +153,86 @@ public:
         delete this->edge_generator;
     }
 
-    //terminate if number of facilities exceed required_facilities
-    //note that vector should be copied each time because it is modified internally, but we don't use them in brute force anymore if greedy is called
-    //so they are copied implicitly in brute force (each brute force has local version)
-    bool greedySetCover(std::vector<std::forward_list<long>>& matchings, std::vector<long>& local_covered,
-                        long& total_covered, fHeap<FacilityRank,long>& heap, std::vector<long>& result) {
-        //note that matching for target with vid=VID in the matching graph
-        //will have VID-source_count index in matchings array because that one contains matchings only for targets
-
-        //logging variables
-        long heap_iterations = 0;
-
-        while (heap.size() > 0) {
-            heap_iterations++;
-            long id;
-            FacilityRank rank(-1,-1);
-            heap.dequeue(id, rank);
-            long init_matching_count = rank.coverage;
-            long only_target_id = id - this->source_count; //id in matchings, #of target node without source nodes
-
-            long matching_count = 0;
-            // check which matched vertex is still not covered and delete covered ones
-
-            // linked list can delete only the NEXT element, so we are checking each next element,
-            // and then the first one separately
-            auto it = matchings[only_target_id].begin();
-            auto prev_it = matchings[only_target_id].begin();
-            //test if matching is not empty. If so - return false immediately
-            if (it == matchings[only_target_id].end()) {
-                logger->add2("greedy deheap iterations", heap_iterations);
-                return false;
+    std::vector<long> get_node_excess() {
+        std::vector<long> node_excess(this->graph_size, -1);
+        if (this->uniform_capacities || this->partially_uniform) {
+            for (long i = this->network->source_indexes.size(); i < graph_size; i++) {
+                node_excess[i] = facility_capacity;
             }
-            it++;
-            while (it != matchings[only_target_id].end()) {
-                long pair_id = (*it);
-                if (local_covered[pair_id]) {
-                    //delete from a linked-list
-                    matchings[only_target_id].erase_after(prev_it);
-                    it = prev_it;
-                } else {
-                    matching_count++;
-                    prev_it = it;
-                }
-                it++;
+        } else {
+            for (long i = 0; i < this->target_indexes.size(); i++) {
+                node_excess[this->get_bi_node_id_by_target_id(i)] = this->target_capacities[i];
             }
-            //process the first one
-            long first_node = (*matchings[only_target_id].begin());
-            if (local_covered[first_node]) {
-                matchings[only_target_id].pop_front();
-            } else {
-                matching_count++;
-            }
-
-            //if the size was changed- enheap back
-            if (matching_count != init_matching_count) {
-                //not guaranteed to have a non-decreasing matching count
-                rank.coverage = matching_count;
-                heap.enqueue(id, rank);
-            } else {
-
-                double relative_gain = (double) matching_count / (double) (source_count - total_covered);
-                logger->add2("relative gain", relative_gain);
-                logger->add2("matching count", matching_count);
-                logger->add2("left count", source_count - total_covered);
-                // otherwise add to the result and update coverage
-                result.push_back(only_target_id);
-
-                if (result.size() > this->required_facilities + lambda) {
-                    logger->add2("greedy deheap iterations", heap_iterations);
-                    return false;
-                }
-                //update usage history here
-                this->last_used[only_target_id] = this->capacity_iteration;
-
-                //relative gain threshold
-//                if (((result.size() > this->required_facilities) && ((double)(source_count - total_covered)/(double)source_count > 0.1)) ||
-//                        ((result.size() > this->required_facilities + lambda) && ((double)(source_count - total_covered)/(double)source_count <= 0.1))) {
-//                    logger->add2("greedy deheap iterations", heap_iterations);
-//                    return false;
-//                }
-
-                for (auto it = matchings[only_target_id].begin(); it != matchings[only_target_id].end(); it++) {
-                    //every node in single-linked list must not be covered yet
-                    local_covered[(*it)]++;
-                    total_covered++;
-                }
-
-                //if number of covered is not enough guaranteed - lambda case
-//                if (matching_count * (this->required_facilities - this->result.size() + lambda) < source_count - total_covered) {
-//                    logger->add2("greedy deheap iterations", heap_iterations);
-//                    return false;
-//                }
-
-
-                if (total_covered == source_count) {
-                    logger->add2("greedy deheap iterations", heap_iterations);
-                    return true;
-                }
-            }
+            node_excess[node_excess.size()-1]=1000000;//excess node
         }
-        throw "Something is wrong";
-        return false; //never should reach this
+        return node_excess;
     }
 
-    //terminate if number of facilities exceed required_facilities
-//    bool greedySetCoverNoHeap() {
-//        //note that matching for target with vid=VID in the matching graph
-//        //will have VID-source_count index in matchings array because that one contains matchings only for targets
-//        long total_covered = 0;
-//        while (result.size() <= this->required_facilities) {
-//            long best_fac_id = 0;
-//            long best_fac_coverage = -1;
-//            for (long id = 0; id < this->required_facilities; id++) {
-//                long matching_count = 0;
-//                // check which matched vertex is still not covered and delete covered ones
-//
-//                // linked list can delete only the NEXT element, so we are checking each next element,
-//                // and then the first one separately
-//                long uncovered = 0;
-//                for (EdgeIterator it = edges[id + this->source_count].begin();
-//                     it != edges[id + this->source_count].end(); it++) {
-//                    long pair_id = it->first;
-//                    if (!covered[pair_id]) {
-//                        uncovered++;
-//                    }
-//                }
-//                if (uncovered > best_fac_coverage) {
-//                    best_fac_coverage = uncovered;
-//                    best_fac_id = id;
-//                }
-//            }
-//
-//            double relative_gain = (double) best_fac_coverage / (double) (source_count - total_covered);
-//            logger->add2("relative gain", relative_gain);
-//            logger->add2("matching count", best_fac_coverage);
-//            logger->add2("left count", source_count - total_covered);
-//            // otherwise add to the result and update coverage
-//            result.push_back(best_fac_id);
-//            for (EdgeIterator it = edges[best_fac_id + this->source_count].begin();
-//                 it != edges[best_fac_id + this->source_count].end(); it++) {
-//                covered[it->first] = true;
-//            }
-//            total_covered += best_fac_coverage;
-//            if (total_covered == source_count) {
-//                return true;
-//            }
-//        }
-//        return false;
-//    }
-
-    /*
-     * Fulfills result with a set of facilities that cover all customers or returns false if does not exist
-     *
-     * Idea: vector of counters for each customer - if covered. Then take a set of facilities (maybe ordered) //@todo check if ordered by overlapping measure is better?
-     * And in a tree traversal way try to exclude up to F'-F facilities until a valid set is found
-     */
-    bool treeCover(std::vector<long>& facility_candidates) {
-        //note that facility candidates  Is a result vector that holds indices in a network but not this bipartite graph
-        std::vector<long> customer_cover(this->source_count,0);
-        //get a set of top-lambda facilities, each represents a set of covered customers
-        //populare cover vector with all candidates
-        for (long i = 0; i < facility_candidates.size(); i++) {
-            long facility_vid = facility_candidates[i] + this->source_count;
-            //iterate through all customers covered by this facility
-            for (EdgeIterator it = edges[facility_vid].begin(); it != edges[facility_vid].end(); it++) {
-                customer_cover[it->first]++;
-            }
+    void build_source_reverse_index() {
+        for (long i = 0; i < this->source_indexes.size(); i++) {
+            this->source_reverse_index[this->source_indexes[i]] = i;
         }
-
-        for (long i = 0; i < customer_cover.size(); i++) {
-            if (customer_cover[i] == 0) return false;
-        }
-        if (facility_candidates.size() <= this->required_facilities) {
-            return true;
-        }
-
-        std::stack<long> index_stack; //each index is a facility index in facility_candidates array
-        index_stack.push(0);
-        bool solution_exist = false;
-
-        while (index_stack.size() > 0) {
-            long current_index = index_stack.top();
-            long facility_vid = facility_candidates[current_index] + this->source_count;
-            bool valid = true;
-
-            //substract covered customers from coverage vector
-            for (EdgeIterator it = edges[facility_vid].begin(); it != edges[facility_vid].end(); it++) {
-                customer_cover[it->first]--;
-                //if any of touched customers is now zero : invalidate current index by removing it from stack
-                if (customer_cover[it->first] == 0) {
-                    valid = false;
-                    //do not break here because we need to increase back coverage later
-                }
-            }
-
-            //now we have either valid current index on the top of the stack or ancestor on the top
-            //that is not equal to current_index
-
-            //if we have valid current index, then we should check if we eliminated enough facilities
-            //number of eliminated facilities is equal to the size of stack because the last element is valid
-            //(remain all customers covered)
-            if (valid && (facility_candidates.size() - index_stack.size() <= this->required_facilities)) {
-                //solution found
-                solution_exist = true;
-                break;
-            }
-
-            /*
-             * check whether we have enough facilities in the subtree by this equation:
-             * (facility_candidates.size() - this->required_facilities) - index_stack.size() : left facilities to place
-             * facility_candidates.size() - current_index - 1 : size of subtree
-             * size of subtree < left facilities to place | *(-1) => invalidate
-             */
-            if (valid && (this->required_facilities + index_stack.size() < current_index + 1)) {
-                valid = false; //too few facilities left
-            }
-
-            //if there is no subtree left, but we still haven't eliminated enough facilities, then we are at the dead brunch
-            //we should pop current valid index and enheap next one instead of it (if any)
-
-            //if we don't have valid top element, then we are at the dead brunch
-            if (!valid) {
-                index_stack.pop();
-                //if we pop - then we increase back the coverage (for current candidate)
-                for (EdgeIterator it = edges[facility_vid].begin(); it != edges[facility_vid].end(); it++) {
-                    customer_cover[it->first]++;
-                }
-            }
-            //in any case we try to push (independently if we are valid or invalid)
-            if (current_index < facility_candidates.size() - 1) { //there is room for increasing
-
-                //if we have valid top element, but it is not an answer yet, then we start traversing subtree
-                //we initialize traversing by putting next index to the stack
-                //at the same time we do it only if there is any subtree
-
-                index_stack.push(current_index + 1);
-            }
-        }
-
-        /*
-         * All covered, but nothing to delete
-         */
-        if (!solution_exist) return false;
-
-        //our solution is in the stack
-        //stack contains facilities that should be DELETED
-        //if stack is empty, then nothing can be deleted
-        if (index_stack.size() == 0) return true;
-
-        while (index_stack.size() > 0) {
-            //delete every result
-            long index_to_delete = index_stack.top();
-            facility_candidates.erase(facility_candidates.begin() + index_to_delete);
-            index_stack.pop();
-        }
-        return true;
     }
 
-    /*
-     * Check for a level of coverage in a heap whether there is a coverage
-     * All parameters are copied to a local variables (passed not by reference)
-     *
-     */
-    //heap passed by reference because a copy is created inside while loop (to reuse initial state for each facility set)
-    //matchings the same
-    bool proceedLevel(std::vector<long>& covered, long& total_covered, fHeap<FacilityRank,long>& heap,
-                      std::vector<std::forward_list<long>>& matchings, std::vector<long>& result) {
-        if (heap.size() == 0) {
-            return false; //out of available facilities for some reason (probably border case)
-        }
-        long current_coverage = heap.getTopValue().coverage;
 
-        //we can check strong feasibility right here
-        //coverage is not feasible if marginal gain for remaining facilities is not enough
-        //this includes the extreme case when no available facilities left
-//        if (current_coverage*(this->required_facilities - result.size()) < (this->source_count - total_covered)) {
-//            return false;
-//        }
-
-        if (source_count == total_covered) {
-            this->result = result;
-            return true;
-        }
-
-        if (this->required_facilities - result.size() == 0) {
-            for (long i = 0; i < source_count; i++) {
-                this->customer_antirank[i] += (covered[i] == 0);
-            }
-            return false;
-        }
-
-        //now check if we need brute force
-        if (this->max_coverage - current_coverage >= gamma) {
-        //if (this->facility_capacity - current_coverage >= gamma) {
-            logger->add2("proceedLevelType",0);
-            //now run greedy algorithm, that chooses the best subset from a heap for current delta_covered set
-            logger->start2("greedy set cover time");
-            bool if_result = greedySetCover(matchings, covered, total_covered, heap, result); //result modified inside
-            logger->finish2("greedy set cover time");
-
-            logger->start2("tree set cover time");
-            if (if_result && (result.size() > this->required_facilities)) { //in case lambda > 0
-                //try set cover
-                if_result = treeCover(result); //result vector updated if success
-            }
-            logger->finish2("tree set cover time");
-            this->result = result;
-
-            for (long i = 0; i < source_count; i++) {
-                this->customer_antirank[i] += (covered[i] == 0);
-            }
-
-            return if_result;
-        }
-        logger->add2("proceedLevelType",1);
-
-        //deheap all of current level
-        long cur_coverage_facility_count = 0;
-        std::forward_list<long> current_level_facilities;
-        while (heap.size() > 0 && heap.getTopValue().coverage == current_coverage) {
-            current_level_facilities.push_front(heap.getTopIdx());
-            heap.dequeue();
-            cur_coverage_facility_count++;
-        }
-        logger->add2("current level fac count", cur_coverage_facility_count);
-
+    bool if_relative_gain_threshold() {
         /*
-         * the idea of taking "left" amount of facilities is example of remaining only 1 uncovered customer,
-         * then we must bruteforce all facilities up to the capacity 1
-         *
-         * cur_coverage_facility_count is number of facilities with current coverage
-         * this->source_count - total_covered = total uncovered facilities
-         *
-         * when number of facilities with current coverage is enough to cover all uncovered yet customers (extreme)
-         * multiplied by gamma that weakens this requirement
+         * condition to terminate set cover when a new target is selected (outdated)
          */
+        return ((result.size() > this->required_facilities) && ((double)(source_count - this->total_covered)/(double)source_count > 0.1)) ||
+               ((result.size() > this->required_facilities + lambda) && ((double)(source_count - this->total_covered)/(double)source_count <= 0.1));
+    }
 
-        //for each A in a set of current level
-        //note: A might have coverage not equal to current_coverage. example: if we start with not first level.
-        //we want to iterate through independent sets with current_coverage, so we reenheap starting facilities
-        //until we find the good one for creating the independent set
-        long best_covered = total_covered;
-        while (current_level_facilities.begin() != current_level_facilities.end()) {
-            std::vector<long> new_covered = covered; //not logged because this should be before coverage checking
-                                                     //others only after current candidate
-            long delta_total_covered = 0;
-
-            long facility_id = *current_level_facilities.begin() - source_count; //this is heap idx, that is build by id in bipartite
-            //update usage vector
-            this->last_used[facility_id] = this->capacity_iteration;
-
-            current_level_facilities.pop_front();
-            //matchings may hold used customers, but we calculate integer delta
-            for (std::forward_list<long>::iterator it = matchings[facility_id].begin(); it != matchings[facility_id].end(); it++) {
-                delta_total_covered += (new_covered[*it] == 0);
-                new_covered[*it]++;
-            }
-            //if delta_total_covered is not equal to promised current_coverage (fall short of expectations), then enheap and continue
-            if (delta_total_covered != current_coverage) {
-                heap.enqueue(facility_id + source_count, FacilityRank(delta_total_covered,this->last_used[facility_id]));
-                continue;
-            }
-
-            //otherwise add to result and start building independent set
-            //initialize new variables
-            logger->start2("brute-force copying");
-            fHeap<FacilityRank,long> new_heap = heap;
-            std::vector<std::forward_list<long>> new_matchings = matchings;
-            std::vector<long> new_result = result;
-            logger->finish2("brute-force copying");
-
-            new_matchings[facility_id].clear();
-            new_result.push_back(facility_id);
-
-            //check if we are done by this level
-            if (total_covered+delta_total_covered == source_count) {
-                //we are done by adding independent facilities at this level
-                this->result = new_result;
-                return true;
-            }
-
-            //if we are not done, then it is impossible for this set
-            if (this->required_facilities - new_result.size() == 0) {
-                continue;
-            }
-
-            //for each B else in the set
-            logger->start2("building independent set");
-            std::forward_list<long>::iterator fac_it = current_level_facilities.begin();
-            std::forward_list<long>::iterator prev_fac_it = fac_it;
-            while (fac_it != current_level_facilities.end()) {
-                long another_facility_id = *fac_it - source_count;
-
-                //if A influenced B then enheap back
-                long new_coverage = 0;
-                bool interfere = false;
-                for (std::forward_list<long>::iterator it = new_matchings[another_facility_id].begin();
-                     it != new_matchings[another_facility_id].end(); it++) {
-                    if (new_covered[*it] == 0) {
-                        new_coverage++;
-                    } else {
-                        interfere = true;
-                    }
-                }
-
-                if (interfere) {
-                    //update new_matchings, delete already covered customers
-                    auto it = new_matchings[another_facility_id].begin();
-                    auto prev_it = it++;
-                    while (it != new_matchings[another_facility_id].end()) {
-                        if (new_covered[*it] > 0) {
-                            new_matchings[another_facility_id].erase_after(prev_it);
-                            it = prev_it;
-                        } else {
-                            prev_it = it;
-                        }
-                        it++;
-                    }
-                    it = new_matchings[another_facility_id].begin();
-                    if (new_covered[*it] > 0) {
-                        new_matchings[another_facility_id].pop_front();
-                    }
-
-                    new_heap.enqueue(another_facility_id + source_count, FacilityRank(new_coverage,this->last_used[facility_id]));
-                } else {
-
-                    //else remove B from the set of current level (do not consider it), and add one more facility to current delta_coverage
-                    for (std::forward_list<long>::iterator it = new_matchings[another_facility_id].begin();
-                         it != new_matchings[another_facility_id].end(); it++) {
-                        new_covered[*it]++;
-                    }
-                    new_matchings[another_facility_id].clear();
-                    delta_total_covered += new_coverage;
-                    new_result.push_back(another_facility_id);
-                    //update usage vector only if we utilize facility, not when we consider and reenheap (another if clause)
-                    this->last_used[facility_id] = this->capacity_iteration;
-
-                    if (total_covered+delta_total_covered == source_count) {
-                        //we are done by adding independent facilities at this level
-                        this->result = new_result;
-                        return true;
-                    }
-
-                    //if we are not done but out of facilities, then go to greedy in order to update antirank
-                    if (this->required_facilities - new_result.size() == 0) {
-                        break;
-                    }
-
-                    /*
-                     * we do not check here whether our result is too big, because we imply that all facilities
-                     * in the current independent set covered the same current_coverage customers, and we checked
-                     * the assumption if every facility left has such coverage then we are done succesfully
-                     */
-
-                    //remove B
-                    if (prev_fac_it == fac_it) {
-                        //we are at the first node, so just delete it
-                        current_level_facilities.pop_front();
-                        fac_it = current_level_facilities.begin();
-                    } else {
-                        current_level_facilities.erase_after(prev_fac_it);
-                        fac_it = prev_fac_it;
-                    }
-                }
-
-                prev_fac_it = fac_it;
-                if (current_level_facilities.begin() != current_level_facilities.end()) fac_it++;
-            }
-            logger->finish2("building independent set");
-            long new_total_covered = total_covered + delta_total_covered;
-            bool if_result = proceedLevel(new_covered, new_total_covered, new_heap,
-                                          new_matchings, new_result);
-            best_covered = (best_covered > new_total_covered) ? best_covered : new_total_covered;
-            if (if_result) {
-                return true; //done
-            } //else - check other possibilities
-        }
-        total_covered = best_covered;
-        return false; //all possibilities checked
+    bool if_covered_is_enough(long matching_count) {
+        /*
+         * another condition to terminate set cover when a new target is selected (outdated, depends on lambda)
+         */
+        return (matching_count * (this->required_facilities - this->result.size() + lambda) < source_count - this->total_covered);
     }
 
 
     /*
      * Returns false if no set cover exists within current lambda
+     *
+     * Important: we can use all facilities except the extra one
      */
     bool findSetCover() {
-        logger->start2("set cover check time");
+        logger->start("set cover check time");
+        std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
         //initialize single linked lists and heaps
-        result.clear();
-        fHeap<FacilityRank,long> heap; //one makes heap to have max first
-        heap.sign = 1; //make heap decreasing
+        this->result.clear();
+        fHeap<FacilityRank,long> heap;
+        std::vector<std::forward_list<long>> matching;
+        heap.sign = 1; //make heap decreasing order
+        this->fillQueueOfMatchedNodesPerFacility(matching, heap);
+        if (heap.size() == 0) {
+            return false; //out of available facilities for some reason (probably border case)
+        }
 
-        std::vector<std::forward_list<long>> matchings(graph_size - source_count);
-        // go through graph services and enheap them
-        // according to the number of covered facilities = number of outgoing edges
-        //for each service - put in a heap with a value = # of matched vertices
-        for (long i = source_count; i < graph_size; i++) {
+        std::vector<long> covered(this->source_count, 0);
+	    this->max_coverage = heap.getTopValue().coverage;
+        bool if_result = greedySetCover(matching, covered, heap);
+        this->updateCustomerAntirank(covered);
+        logger->add2("total covered final", total_covered);
+
+        logger->finish("set cover check time");
+        return if_result;
+    }
+
+    void updateCustomerAntirank(std::vector<long>& covered) {
+        for (long i = 0; i < source_count; i++) {
+            this->customer_antirank[i] += (covered[i] == 0);
+        }
+    }
+
+    /*
+     * Rank facilities according to matched nodes and the last iteration when it was used
+     */
+     void fillQueueOfMatchedNodesPerFacility(std::vector<std::forward_list<long>>& matching, fHeap<FacilityRank,long>& heap) {
+        matching.resize(this->get_facility_count()-1);//without extra node
+        for (long i = source_count; i < graph_size-1; i++) {
             forward_list<long> linked_nodes;
+            long target_id = this->get_target_id_by_bi_node_id(i);
             //there can be many matched vertices because of capacities
             long matching_count = 0;
             EdgeIterator it;
@@ -665,198 +242,331 @@ public:
             }
             //put in a heap
             if (matching_count >= 0) {
-                heap.enqueue(i, FacilityRank(matching_count,this->last_used[i-source_count]));
+                heap.enqueue(i, FacilityRank(matching_count,this->last_used[target_id]));
             }
-            matchings[i - source_count] = linked_nodes;
+            matching[target_id] = linked_nodes;
+        }
+    };
+
+
+    bool greedySetCover(std::vector<std::forward_list<long>>& matching, std::vector<long>& local_covered, fHeap<FacilityRank,long>& heap) {
+        long heap_iterations = 0;
+        total_covered = 0;
+        while (pickAnotherFacility(matching, local_covered, heap)) {
+            heap_iterations++;
+        }
+//        std::cout << total_covered << std::endl;
+//        logger->add2("greedy deheap iterations", heap_iterations);
+        return (total_covered == source_count);
+    }
+
+    bool pickAnotherFacility(std::vector<std::forward_list<long>>& matching, std::vector<long>& local_covered, fHeap<FacilityRank,long>& heap) {
+        if (heap.size() == 0) {
+            return false;
         }
 
-        /*
-         * Here we embed another brute force:
-         * Check each level of set coverage, and start trying each of them.
-         * This means: have a queue of all facilities that must be tried
-         *
-         */
+        long bi_node_id;
+        FacilityRank rank(-1,-1);
+        heap.dequeue(bi_node_id, rank);
+        long init_target_coverage = rank.coverage;
+        long target_id = this->get_target_id_by_bi_node_id(bi_node_id);
 
-        bool if_result = false;
-        long previous_covered = 0;
-//        gamma = 1;
-//        while (!if_result) {
-//            //should be ere in case treecover is not called. we should have zero antirank anyway
-//            std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
-//
-//            logger->start2("brute-force copying");
-//            std::vector<std::forward_list<long>> new_matchings = matchings;
-//            fHeap<long,long> new_heap = heap;
-//            logger->finish2("brute-force copying");
-//
-//            std::vector<long> covered(this->source_count, 0);
-//            std::vector<long> result;
-//            long total_covered = 0;
-//            if_result = proceedLevel(covered, total_covered, new_heap, new_matchings, result); //recursion
-//
-//            //check whether to raise gamma or raise demand
-//            double gamma_improvement = (double)(total_covered - previous_covered)/(double)source_count;
-//            logger->add2("total covered greedy", total_covered);
-//            if (previous_covered != 0) logger->add2("gamma improvement", gamma_improvement);
-//            logger->add2("gamma", this->gamma);
-//            if (if_result || total_covered < 0.9 * source_count || gamma_improvement == 0) {
-//                if (previous_covered != 0) gamma--;
-//                break;
+        //test if matching is not empty. If so - return false immediately
+        if (matching[target_id].begin() == matching[target_id].end()) {
+            return false;
+        }
+        // check which matched vertex is still not covered and delete covered ones
+        long new_covered_by_target_count = this->remove_covered_customers_from_queue(matching[target_id], local_covered);
+
+        if (new_covered_by_target_count != init_target_coverage) {
+            //if the size was changed - enheap back
+            //not guaranteed to have a non-decreasing matching count
+            rank.coverage = new_covered_by_target_count;
+            heap.enqueue(bi_node_id, rank);
+            return true;
+        } else {
+            // otherwise add to the result and update coverage
+            result.push_back(target_id);
+
+            double relative_gain = (double) new_covered_by_target_count / (double) (source_count - total_covered);
+//            logger->add2("relative gain", relative_gain);
+//            logger->add2("matching count", new_covered_by_target_count);
+//            logger->add2("left count", source_count - total_covered);
+
+            if (result.size() > this->required_facilities + lambda) {
+                return false;
+            }
+            //update usage history here
+            this->last_used[target_id] = this->capacity_iteration;
+
+            for (auto it = matching[target_id].begin(); it != matching[target_id].end(); it++) {
+                //every node in single-linked list must not be covered yet
+                local_covered[(*it)]++;
+                total_covered++;
+            }
+            return true;
+        }
+    }
+
+    long remove_covered_customers_from_queue(std::forward_list<long>& queue, std::vector<long>& coverage) {
+        // linked list can delete only the NEXT element, so we are checking each next element,
+        // and then the first one separately
+        long non_covered_count = 0;
+        auto it = queue.begin();
+        auto prev_it = queue.begin();
+        it++;
+        while (it != queue.end()) {
+            long pair_id = (*it);
+            if (coverage[pair_id]) {
+                //delete from a linked-list
+                queue.erase_after(prev_it);
+                it = prev_it;
+            } else {
+                non_covered_count++;
+                prev_it = it;
+            }
+            it++;
+        }
+        //process the first one
+        long first_node = (*queue.begin());
+        if (coverage[first_node]) {
+            queue.pop_front();
+        } else {
+            non_covered_count++;
+        }
+        return non_covered_count;
+    }
+
+    /*
+     * return: true if at least one customer is newly matched
+     */
+    //increase capacities of everyone
+    //calculate capacity increase vector based on covered and antirank
+    //summarize covered and antirank vector. if covered is not full then antirank is zero. otherwise covered is one anywhere
+    //so they do not interfere
+    bool increaseCapacities(std::vector<int>& complete_sources) {
+
+        std::vector<long> speed(source_count);
+        long max = 0;
+        long total_covered = 0;
+        long total_complete = 0;
+        for (long i = 0; i < source_count; i++) {
+            speed[i] = this->customer_antirank[i];
+            total_covered += (speed[i] == 0);//total covered
+            total_complete += (complete_sources[i]);
+            speed[i] *= (1 - complete_sources[i]); //do not increase those with all component explored even if uncovered (hopping for another set cover attempt)
+            max = std::max(speed[i], max);
+        }
+        if (total_complete == source_count) {
+            throw infeasible_solution;
+        }
+        if (max == 0) {
+            for (long i = 0; i < speed.size(); i++) {
+                speed[i] = (1-complete_sources[i]);
+            }
+        }
+//        else {
+//            double coef = 1 + this->alpha * (double) total_covered / (double)source_count;
+//            for (long i = 0; i < speed.size(); i++) {
+//                speed[i] = (long)(coef * (double)speed[i]/(double)max);
 //            }
-//            previous_covered = total_covered;
-//            gamma++;
 //        }
 
-        std::fill(customer_antirank.begin(), customer_antirank.end(), 0);
-        long total_covered = 0;
-        std::vector<long> covered(this->source_count, 0);
-	this->max_coverage = heap.getTopValue().coverage;
-        if_result = proceedLevel(covered, total_covered, heap, matchings, result);
-        logger->add2("total covered final", total_covered);
+        if (this->greedyMatching) {
+            this->resetAssignmentForGreedyMatching();
+        }
 
-        //return findSetCover result, with antirank updated as a global variable
-        logger->finish2("set cover check time");
-        return if_result;
+        bool anychanges = false;
+        long total_increased = 0;
+        for (long vid = 0; vid < source_count; vid++) {
+            for (long j = 0; j < speed[vid]; j++) {
+                total_increased++;
+                int success = this->increaseCapacity(vid);
+                if (!success) {
+                    complete_sources[vid] = 1; //fully explored component
+                } else {
+                    anychanges = true;
+                }
+            }
+        }
+
+        if (this->greedyMatching) {
+            std::vector<long> newly_explored_sources = this->matchGreedy();
+            anychanges = (newly_explored_sources.size() < total_increased);
+            for (auto it = newly_explored_sources.begin(); it != newly_explored_sources.end(); it++) {
+                complete_sources[(*it)] = 1;
+            }
+        }
+
+        return anychanges;
+    }
+
+    void resetAssignmentForGreedyMatching() {
+        for (auto i = 0; i < this->edge_generator->n; i++) {
+            this->node_excess[i] = this->full_node_excess[i];
+        }
+        for (auto i = this->edge_generator->n; i < this->edges.size(); i++) {
+            this->edges[i] = Adjlist();
+            this->node_excess[i] = this->full_node_excess[i];
+        }
+    }
+
+    /*
+     * Select worst customers: find worst matching and select closest not-matched facility
+     *
+     * - Traverse customers and select better options for each one.
+     *    - if a customer does not have any better options - skip him, he already is covered by best option
+     * - Select top-k using heapsort to satisfy facility requirement
+     *    - if heapsort is larger than k, then we can shrink size of heap, as we never use more than k
+     *      because each element in heap is a new facility after deheaping
+     *    - if all selected better options is less than required left facilities, then select any available facilities
+     *      because everyone already have the best option so far
+     *    - if two customers request for the same facility, then we need to select more facilities, but it is
+     *      not likely, so we just ignore again if some particular facility is already chosen
+     *      hoping that it will not be capacitated. if it will, then it goes for a random facility chosen later
+     *      for this purpose we maintain a full heap, without reducing size, as we can pull more than k
+     *
+     */
+    void locateRest() {
+        long facilities_left = required_facilities - this->result.size();
+        logger->add("facilities left after termination", facilities_left);
+        if (facilities_left <= 0) {
+            return; //no problem
+        }
+        logger->start("locate rest time");
+
+        //mark which facility is chosen, created here because result is built several times
+        std::vector<bool> result_flag(this->edge_generator->m, false);
+        for (long i = 0; i < this->result.size(); i++) {
+            result_flag[this->result[i]] = true;
+        }
+
+        std::vector<long> source_best(source_count, LONG_MAX);
+        for (long i = 0; i < this->result.size(); i++) {
+            //each element in result array is a facility location
+            //bipartite graph still holds customers that were matched to that location
+            //note that one customer can be matched with several facilities
+            //so for current facility location we get all covered customers, add (or update!) them in the heap
+            long location_vid = this->result[i] + source_count; //result contains ids in a network graph
+            //traverse each matched customer in the bipartite graph
+            for (EdgeIterator it = edges[location_vid].begin(); it != edges[location_vid].end(); it++) {
+                long cur_dist = -it->second; //minus because the edge is inverted
+                source_best[it->first] = std::min(source_best[it->first], cur_dist);
+            }
+        }
+        //now source_best should contain each customer some non-infinite number
+        //mark -1 in source_best nodes which we explored the target
+        fHeap<long,long> partialHeapsort;
+        for (long i = 0; i < this->edge_generator->edgeMemory.size(); i++) { //refactor this by saving in mather history per each node
+            newEdge e = this->edge_generator->edgeMemory[i];
+            if (source_best[e.source_node] >= 0) {
+                partialHeapsort.enqueue(e.target_node-this->edge_generator->n, source_best[i] - e.weight);
+                source_best[e.source_node] = -1;
+            }
+        }
+
+        //here we deheap ID of customer in source index; then, we should place there facility
+        //result should contain id of facility in target_index array
+        long new_location;
+        while ((facilities_left > 0) && (partialHeapsort.size() > 0)) {
+            partialHeapsort.dequeue(new_location);
+            if (!result_flag[new_location]) {
+                this->result.push_back(new_location); //put location in a network
+                result_flag[new_location] = true;
+                facilities_left--;
+            }
+        }
+
+        if (facilities_left > 0) {
+            for (long i = 0; i < result_flag.size(); i++) {
+                if (!result_flag[i]) {
+                    this->result.push_back(i);
+                    facilities_left--;
+                }
+                if (facilities_left == 0) {
+                    break;
+                }
+            }
+        }
+
+        logger->finish("locate rest time");
     }
 
     void locateFacilities() {
-        if (this->state != NOT_LOCATED) return; //probably infeasible because of initialization checks
-
-        if (this->required_facilities*this->facility_capacity < source_count) {
-            logger->add("error", "Problem infeasible: not enough facilities");
-            this->state = INFEASIBLE;
-            return;
-        }
-
         logger->start("runtime");
-
-        //calculate preliminary matching
-        logger->start2("prematching time");
-        this->run();
-        logger->finish2("prematching time");
+        logger->start("matching");
+        this->match(); //calculate preliminary matching
+        logger->finish("matching");
 
         // increase customer capacities until we can choose a covering subset of matched services
-        capacity_iteration = 0;
-        std::vector<int> not_complete_sources(source_count, 1);
+        this->capacity_iteration = 0; //used for ranking @todo move to parameters
+        std::vector<int> complete_sources(source_count, 0);
         while (!this->findSetCover()) {
             capacity_iteration++;
-            //increase capacities of everyone
-            logger->start2("increase capacity time");
-            //calculate capacity increase vector based on covered and antirank
-            //summarize covered and antirank vector. if covered is not full then antirank is zero. otherwise covered is one anywhere
-            //so they do not interfere
-            std::vector<long> speed(source_count);
-            long max = 0;
-            long total_covered = 0;
-            for (long i = 0; i < source_count; i++) {
-                speed[i] = this->customer_antirank[i];
-                total_covered += (speed[i] == 0);//total covered
-                speed[i] *= not_complete_sources[i]; //do not increase those with all component explored even if uncovered (hopping for another set cover attempt)
-                max = std::max(speed[i], max);
-            }
-            if (max == 0) {
-                for (long i = 0; i < speed.size(); i++) {
-                    speed[i] = 1;
-                }
-            } else {
-                double coef = 1 + this->alpha * (double) total_covered / (double)source_count;
-                for (long i = 0; i < speed.size(); i++) {
-                    speed[i] = (long)(coef * (double)speed[i]/(double)max);
-                }
-            }
+            logger->start("matching");
+//            std::cout << this->total_covered << std::endl;
+            if (!increaseCapacities(complete_sources)) {
+                //try more - check if set cover result is the same. no more facilities only if absolutely all customers are full
+                std::cout << "nothing added with coverage " << this->total_covered << std::endl;
 
-            for (long vid = 0; vid < source_count; vid++) {
-                for (long j = 0; j < speed[vid]; j++) { 
-                    int success = this->increaseCapacity(vid);
-                    if (!success) {
-                        not_complete_sources[vid] = 0; //fully explored component
-                    }
-                }
-//                this->increaseCapacity(vid);
+                //remove one last facility to fix the size of the result
+                this->result.pop_back();
+                break;
+                //throw no_more_capacities_to_increase;
             }
-            logger->finish2("increase capacity time");
+            logger->finish("matching");
         }
-        logger->add1("number of iterations", capacity_iteration);
-
-        //save number of "full" facilities @todo implement using capacity vector
-//        long fullfac = 0;
-//        long nullfac = 0;
-//        for (long i = this->source_indexes.size(); i < graph_size; i++) {
-//            fullfac += (node_excess[i] == 0);
-//            nullfac += (node_excess[i] == facility_capacity);
-//        }
-//        logger->add1("fullfac", fullfac);
-//        logger->add1("nullfac", nullfac);
-
-        /*
-         * we place "free" facilities right near the customers with "furthest" matching
-         * so in calculateResult function we must recalculate distances
-         */
-        logger->add1("facilities left after termination", (long)(required_facilities - this->result.size()));
-        logger->start2("lack facility allocation time");
-        if (this->result.size() < required_facilities) {
-            //find the total number of available facilities
-            long facilities_left = required_facilities - this->result.size();
-            if (this->source_count <= facilities_left) {
-                //trivial solution - objective, objective = 0, place facilities in customer locations
-                for (long i = 0; i < source_count; i++) {
-                    this->result.push_back(this->source_indexes[i]);
-                }
-                for (long i = 0; i < facilities_left - source_count; i++) {
-                    this->result.push_back(this->source_indexes[0]);
-                }
-
-                logger->finish2("lack facility allocation time");
-                logger->finish("runtime");
-                this->state = LOCATED;
-                return;
-            }
-            //get worst <facilities_left> covered customers by existing result
-            //go through all customers and for each find the smallest (best) option
-            //then choose top-<facilities_left> options
-            std::vector<long> source_best(source_count, LONG_MAX);
-            for (long i = 0; i < this->result.size(); i++) {
-                //each element in result array is a facility location
-                //bipartite graph still holds customers that were matched to that location
-                //note that one customer can be matched with several facilities
-                //so for current facility location we get all covered customers, add (or update!) them in the heap
-                long location_vid = this->result[i] + source_count; //result contains ids in a network graph
-                //traverse each matched customer in the bipartite graph
-                for (EdgeIterator it = edges[location_vid].begin(); it != edges[location_vid].end(); it++) {
-                    long cur_dist = -it->second; //minus because the edge is inverted
-                    source_best[it->first] = std::min(source_best[it->first], cur_dist);
-                }
-            }
-            //now get top-k and add to the result
-            fHeap<long,long> partialHeapsort;
-            for (long i = 0; i < this->source_count; i++) {
-                if (partialHeapsort.size() < facilities_left) {
-                    partialHeapsort.enqueue(i, source_best[i]);
-                } else {
-                    if (partialHeapsort.getTopValue() < source_best[i]) { //we want to get top worst, i.e. top biggest
-                        partialHeapsort.dequeue();
-                        partialHeapsort.enqueue(i, source_best[i]);
-                    }
-                }
-            }
-            long new_location;
-            while (partialHeapsort.dequeue(new_location)) {
-                this->result.push_back(new_location-this->source_count); //put location in a network
-            }
-        }
-        logger->finish2("lack facility allocation time");
-        logger->finish("runtime");
+        logger->add("number of iterations", capacity_iteration);
+        locateRest(); //locate rest of facilities (if a set that covers customers is smaller than required number of facilities)
         this->state = LOCATED;
+
+        logger->finish("runtime");
+    }
+
+    inline long get_node_id_by_facility_id(long facility_id) {
+        return (this->all_nodes_available) ? facility_id : this->target_indexes[facility_id];
+    }
+
+    inline long get_capacity_by_facility_id(long facility_id) {
+        return (this->uniform_capacities || this->partially_uniform) ? this->facility_capacity : this->target_capacities[facility_id];
+    }
+
+    inline long get_facility_id_by_node_id(long node_id) {
+        return (this->all_nodes_available) ? node_id : dynamic_cast<TargetExploringEdgeGenerator<long,long>*>(this->edge_generator)->get_facility_id_by_node_id(node_id);
+    }
+
+    inline long get_source_id_by_node_id(long node_id) {
+        return this->source_reverse_index[node_id];
+    }
+
+    inline long get_bi_node_id_by_target_id(long target_id) {
+        return target_id + this->source_count;
+    }
+
+    inline long get_target_id_by_bi_node_id(long node_id) {
+        return node_id - this->source_count;
+    }
+
+    inline long get_bi_node_id_by_target_node_id(long node_id) {
+        return this->get_bi_node_id_by_target_id(this->get_facility_id_by_node_id(node_id));
+    }
+
+    inline long get_facility_count() {
+        return graph_size - source_count; //todo what about excess node?
+    }
+
+    std::vector<long> get_chosen_facility_node_ids() {
+        std::vector<long> node_ids = this->result;
+        for (auto it = node_ids.begin(); it != node_ids.end(); it++) {
+            *it = this->get_node_id_by_facility_id(*it);
+        }
+        return node_ids;
     }
 
     long calculateResult() {
         //calculate Total Sum
-        if (this->state == INFEASIBLE) {
-            this->totalCost = -1;
-            return -1;
-        }
         if (this->state != LOCATED) {
-            throw "Wrong class state: calculate locations first.";
+            throw std::logic_error("Facilities should be located before computing result");
         }
         logger->start("result final calculation time");
 
@@ -866,23 +576,27 @@ public:
         //build valid bipartite graph : reverse all edges to the direct position
         //create an edge generator with calculated distances between known facilities and customers
         //run new matcher
-        std::vector<long> new_excess(this->source_indexes.size() + this->result.size());
-        if (this->uniform_capacities) {
-            std::fill(new_excess.begin(), new_excess.end(), this->facility_capacity);
-        } else {
-            for (long i = source_indexes.size(); i < new_excess.size(); i++) {
-                new_excess[i] = this->target_capacities[i-source_indexes.size()];
-            }
-        }
 
+        std::string facility_index_list = "";
+        std::vector<long> new_excess(this->source_indexes.size() + this->result.size());
+        for (long i = source_indexes.size(); i < new_excess.size(); i++) {
+            long facility_id = this->result[i-source_indexes.size()];
+            new_excess[i] = this->get_capacity_by_facility_id(facility_id);
+            facility_index_list += std::to_string(this->get_node_id_by_facility_id(facility_id)) + ",";
+        }
+        logger->add("facilities_indexes", facility_index_list);
 
         for (long i = 0; i < this->source_indexes.size(); i++) {
             new_excess[i] = -1;
         }
-        TargetEdgeGenerator short_bigraph_generator(this, this->result);
-        Matcher<long,long,long> M(&short_bigraph_generator, new_excess, this->logger);
-        M.run();
-        M.calculateResult();
+        std::vector<long> chosen_node_ids = this->get_chosen_facility_node_ids();
+        TargetExploringEdgeGenerator<long, long> bigraph_generator(*this->network, chosen_node_ids);
+        Matcher<long,long,long> M(&bigraph_generator, new_excess, this->logger, false);
+        M.greedyMatching = this->greedyMatching * this->objective_matching; //objective matching 0 means there should be SIA for objective calculation
+        M.greedyMatchingOrder = this->greedyMatchingOrder;
+        M.network = this->network;
+        M.match();
+        M.calculateResult(); // we CARE here if some customers are assigned to the extra node
         this->totalCost = M.result_weight;
 
         //calculate number of fully capacitated nodes
@@ -894,7 +608,17 @@ public:
 
         logger->finish("result final calculation time");
         logger->add("objective", totalCost);
-        return totalCost;
+        return this->totalCost;
+    }
+
+    void run() {
+        this->check_feasibility();
+        try {
+            this->locateFacilities();
+        } catch (NoMoreCapacitiesToIncrease& e) {
+            throw infeasible_solution;
+        }
+        this->calculateResult();
     }
 };
 

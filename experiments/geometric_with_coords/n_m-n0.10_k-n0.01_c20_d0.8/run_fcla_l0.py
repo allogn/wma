@@ -34,8 +34,6 @@ for f in os.listdir(path.join(data_path,'geometric_with_coords',expdir)):
     p = subprocess.Popen([path.join(root_path,'bin','fcla'),'-i',
 			  full_target_path,
 			  '-c',str(capacity),
-			  '-g','0',
-			  '-a','1',
 			  '-n',str(facilities),
 			  '-o',path.join(data_path,'geometric_with_coords',expdir,'solutions','fcla_l0',id + "fac" + str(facilities) + ".json")],
 			  stdout=subprocess.PIPE,

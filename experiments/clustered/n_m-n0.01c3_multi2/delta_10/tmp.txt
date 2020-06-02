@@ -1,0 +1,10 @@
+{"id":"1527583550231039439",
+"capacity of facilities":5000,
+"compute components":0.006075,
+"number of components":1,
+"number of facilities":50,
+"objective":9554,
+"runtime":0.450211,
+"total time":3.23798,
+"Created":"Tue May 29 12:08:45 2018"
+}

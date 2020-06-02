@@ -8,6 +8,7 @@
 #endif
 
 #include <iostream>
+#include <fstream>
 #include <map>
 #include <string>
 #include <ctime>
@@ -42,45 +43,45 @@ public:
     }
 
     inline void add1(std::string key, std::string val) {
-#if _DEBUG_ > 0
+//#if _DEBUG_ > 0
         std::map<std::string, std::vector<std::string>>::iterator it;
         if (it != str_dict.end()) {
             str_dict[key].push_back(val);
         } else {
             str_dict[key] = std::vector<std::string>({val});
         }
-#endif
+//#endif
     }
     inline void add1(std::string key, double val) {
-#if _DEBUG_ > 0
+//#if _DEBUG_ > 0
         std::map<std::string, std::vector<double>>::iterator it;
         if (it != float_dict.end()) {
             float_dict[key].push_back(val);
         } else {
             float_dict[key] = std::vector<double>({val});
         }
-#endif
+//#endif
     }
 
     inline void add2(std::string key, std::string val) {
-#if _DEBUG_ > 1
+//#if _DEBUG_ > 1
         std::map<std::string, std::vector<std::string>>::iterator it;
         if (it != str_dict.end()) {
             str_dict[key].push_back(val);
         } else {
             str_dict[key] = std::vector<std::string>({val});
         }
-#endif
+//#endif
     }
     inline void add2(std::string key, double val) {
-#if _DEBUG_ > 1
+//#if _DEBUG_ > 1
         std::map<std::string, std::vector<double>>::iterator it;
         if (it != float_dict.end()) {
             float_dict[key].push_back(val);
         } else {
             float_dict[key] = std::vector<double>({val});
         }
-#endif
+//#endif
     }
 
     /*
@@ -106,14 +107,14 @@ public:
     }
 
     inline void start1(std::string key) {
-#if _DEBUG_ > 0
+//#if _DEBUG_ > 0
         clock_t begin = clock();
         opened_times[key] = begin;
-#endif
+//#endif
     }
 
     inline void finish1(std::string key) {
-#if _DEBUG_ > 0
+//#if _DEBUG_ > 0
         clock_t end = clock();
         clock_t begin = opened_times[key];
         double elapsed = double(end - begin) / CLOCKS_PER_SEC;
@@ -125,18 +126,18 @@ public:
         } else {
             float_dict[key] = std::vector<double>({elapsed});
         }
-#endif
+//#endif
     }
 
     inline void start2(std::string key) {
-#if _DEBUG_ > 1
+//#if _DEBUG_ > 1
         clock_t begin = clock();
         opened_times[key] = begin;
-#endif
+//#endif
     }
 
     inline void finish2(std::string key) {
-#if _DEBUG_ > 1
+//#if _DEBUG_ > 1
         clock_t end = clock();
         clock_t begin = opened_times[key];
         double elapsed = double(end - begin) / CLOCKS_PER_SEC;
@@ -148,7 +149,7 @@ public:
         } else {
             float_dict[key] = std::vector<double>({elapsed});
         }
-#endif
+//#endif
     }
 
     void save(std::string out_filename) {
@@ -190,6 +191,7 @@ public:
         tt = tt.substr(0,tt.size()-1);
         outf << "\"Created\":\"" << tt << "\"\n";
         outf << "}";
+        outf.close();
     }
 };
 

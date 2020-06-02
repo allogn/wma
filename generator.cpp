@@ -54,6 +54,7 @@ int main(int argc, const char** argv) {
     double geom_dens;
     long clusters;
     bool connected;
+    bool repeat;
 
     po::options_description desc("Allowed options");
     desc.add_options()
@@ -62,8 +63,9 @@ int main(int argc, const char** argv) {
             ("output,o", po::value<string>(&outdir)->required(), "Output directory")
             ("nodes,n", po::value<long>(&n)->required(), "Size of a graph")
             ("density,d", po::value<double>(&geom_dens)->default_value(1), "Density of a geometric graph, relatively to size")
-	    ("connected,u", po::value<bool>(&connected)->default_value(false), "Force to have one component")
+	        ("connected,u", po::value<bool>(&connected)->default_value(false), "Force to have one component")
             ("clusters,c", po::value<long>(&clusters)->default_value(1), "Number of clusters")
+            ("repeat,r", po::value<bool>(&repeat)->default_value(false), "Allow multiple customers per node")
             ("sources,s", po::value<long>(&sources)->default_value(1), "Number of Sources (customers)");
 
     po::variables_map vm;
@@ -125,55 +127,166 @@ int main(int argc, const char** argv) {
 			igraph_empty(&graph, coords.size(), false);
 			for (long i = 0; i < coords.size(); i++) {
 			    for (long j = i + 1; j < coords.size(); j++) {
-				double dist = sqrt(pow(coords[i].first - coords[j].first, 2) + pow(coords[i].second - coords[j].second, 2));
-				if (dist < 1. / sqrt((double) coords.size()) * geom_dens) {
-				    weights.push_back(dist * 1000);
-				    edges.push_back(i);
-				    edges.push_back(j);
-				}
+                    double dist = sqrt(pow(coords[i].first - coords[j].first, 2) + pow(coords[i].second - coords[j].second, 2));
+                    if (dist < 1. / sqrt((double) coords.size()) * geom_dens) {
+                        weights.push_back(dist * 1000);
+                        edges.push_back(i);
+                        edges.push_back(j);
+                    }
 			    }
 			}
 			//connect centers
 			for (long i = 0; i < prev_center_id.size(); i++) {
 			    for (long j = i + 1; j < prev_center_id.size(); j++) {
-				double prev_center_x_1 = coords[prev_center_id[i]].first;
-				double prev_center_x_2 = coords[prev_center_id[j]].first;
-				double prev_center_y_1 = coords[prev_center_id[i]].second;
-				double prev_center_y_2 = coords[prev_center_id[j]].second;
-				double dist = sqrt(
-					pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
-				weights.push_back(dist * 1000);
-				edges.push_back(prev_center_id[i]);
-				edges.push_back(prev_center_id[j]);
+                    long node1 = prev_center_id[i];
+                    long node2 = prev_center_id[j];
+                    
+                    bool exist = false;
+                    //check if they are not yet connected
+                    for (long k = 0; k < edges.size(); k+=2) {
+                        if ((edges[k] == node1) && (edges[k+1] == node2)) {
+                            exist = true;
+                        }
+                    }
+                    if (exist) continue;
+                    
+                    double prev_center_x_1 = coords[node1].first;
+                    double prev_center_x_2 = coords[node2].first;
+                    double prev_center_y_1 = coords[node1].second;
+                    double prev_center_y_2 = coords[node2].second;
+                    double dist = sqrt(
+                        pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
+                    weights.push_back(dist * 1000);
+                    edges.push_back(node1);
+                    edges.push_back(node2);
 			    }
 			}
-			//for point plotting
-	//                for (long i = 0; i < coords.size(); i++) {
-	//                    cout << coords[i] << "," << coords[i] << endl;
-	//                }
 			create_graph(&graph, coords.size(), edges);
+
+            if (connected) {
+                //connect all components one to the next one
+                igraph_vector_t membership;
+                igraph_vector_init(&membership, 0);
+                igraph_vector_t csize;
+                igraph_vector_init(&csize, 0);
+                igraph_integer_t no;
+                igraph_clusters(&graph, &membership, &csize, &no, IGRAPH_WEAK);
+//                std::vector<long> new_edges;
+//                std::vector<long> new_weights;
+//                std::vector<long> component_representatives(no, -1);
+//                if (no > 1) {
+//                    for (igraph_integer_t member = 0; member < igraph_vcount(&graph); member++) {
+//                        igraph_integer_t component_id = VECTOR(membership)[member];
+//                        if (component_representatives[component_id] == -1) {
+//                            component_representatives[component_id] = member;
+//                        }
+//                    }
+//                    for (igraph_integer_t component_id = 0; component_id < no; component_id++) {
+//                        //get first node in component1
+//                        long node1 = component_representatives[component_id];
+//                        //get first node in the next component (or first component if it is the last)
+//                        long node2;
+//                        if (component_id == no-1) {
+//                            node2 = component_representatives[0];
+//                        } else {
+//                            node2 = component_representatives[component_id+1];
+//                        }
+//                        //connect two nodes
+//                        double prev_center_x_1 = coords[node1].first;
+//                        double prev_center_x_2 = coords[node2].first;
+//                        double prev_center_y_1 = coords[node1].second;
+//                        double prev_center_y_2 = coords[node2].second;
+//                        double dist = sqrt(
+//                                pow(prev_center_x_1 - prev_center_x_2, 2) + pow(prev_center_y_1 - prev_center_y_2, 2));
+//                        weights.push_back(dist * 1000);
+//                        new_edges.push_back(node1);
+//                        new_edges.push_back(node2);
+//                    }
+//                }
+//
+//                igraph_vector_t v1;
+//                igraph_real_t real_edges[new_edges.size()];
+//                for (long i = 0; i < new_edges.size(); i++) {
+//                    real_edges[i] = (double)new_edges[i];
+//                }
+//                igraph_vector_view(&v1, real_edges, sizeof(real_edges)/sizeof(double));
+//                igraph_add_edges(&graph, &v1, 0);
+
+                std::vector<long> sizes(no);
+                for (long i = 0; i < no; i++) {
+                    sizes[i] = VECTOR(csize)[i];
+                }
+                std::sort(sizes.begin(), sizes.end(), std::greater<long>());
+                assert(sizes[0] >= sizes[sizes.size() - 1]);
+
+                long members_id = -1;
+                for (long i = 0; i < sizes.size(); i++) {
+                    if (VECTOR(csize)[i] == sizes[0]) {
+                        members_id = i;
+                        break;
+                    }
+                }
+                assert(members_id > -1);
+                std::vector<double> vlist;
+                for (long i = 0; i < igraph_vcount(&graph); i++) {
+                    if (VECTOR(membership)[i] == members_id) {
+                        vlist.push_back(i);
+                    }
+                }
+
+                if (sizes[0] >= igraph_vcount(&graph)*(4./5.)) {
+                    //remove small components
+                    igraph_t new_graph;
+                    igraph_vs_t vids;
+                    igraph_vector_t vids_vec;
+                    igraph_vector_init_copy(&vids_vec, &vlist[0], vlist.size());
+
+                    igraph_vs_vector(&vids, &vids_vec);
+                    igraph_induced_subgraph(&graph, &new_graph, vids, IGRAPH_SUBGRAPH_AUTO);
+
+                    igraph_vector_destroy(&vids_vec);
+                    igraph_vs_destroy(&vids);
+                    igraph_destroy(&graph);
+                    graph = new_graph;
+                }
+
+                igraph_vector_destroy(&membership);
+                igraph_vector_destroy(&csize);
+            }
 		    }
 		    break;
 		default:
 		    throw "Method is not implemented";
 	    }
-         if (!connected) {
-              check_connected = true;
-         } else {
-		 igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
-		 if (!check_connected) {
-		      igraph_destroy(&graph);
-		 }
-         }
+        if (!connected) {
+          check_connected = true;
+        } else {
+            igraph_is_connected(&(graph),&check_connected,IGRAPH_WEAK);
+            if (!check_connected) {
+              igraph_destroy(&graph);
+            }
+        }
     }
 
     //choose source_indexes randomly
-    std::vector<long> all_nodes(n);
-    for (long i = 0; i < n; i++) all_nodes[i] = i;
-    std::random_shuffle(all_nodes.begin(),all_nodes.end());
-    std::vector<long> source_indexes(sources);
-    for (long i = 0; i < sources; i++) source_indexes[i] = all_nodes[i];
+    std::vector<long> source_indexes;
+    n = igraph_vcount(&graph);
+    source_indexes.resize(sources);
+    if (!repeat) {
+        if (sources > n) {
+            throw "Too many sources";
+        }
+        std::vector<long> all_nodes(n);
+        for (long i = 0; i < n; i++) all_nodes[i] = i;
+        std::random_shuffle(all_nodes.begin(),all_nodes.end());
+        for (long i = 0; i < sources; i++) source_indexes[i] = all_nodes[i];
+    } else {
+        for (long i = 0; i < sources; i++) {
+            source_indexes[i] = randint(0, n-1);
+        }
+    }
 
     Network network(&graph, weights, source_indexes, coords);
     network.save(outdir);
+    igraph_destroy(&graph);
 }

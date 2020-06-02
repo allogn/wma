@@ -1,6 +1,10 @@
-//
-// Created by allogn on 24.01.17.
-//
+/*
+ * Match in a bipartite graph. Target and Source node ids correspond to ids in the bipartite graph.
+ * Edge Generator used to get weights for new edges, returning source and target id corresponding to a bipartite graph.
+ *
+ * Supports undercapacitated facilities: adds one extra node with required excess inflow. All nodes matched to that node
+ * are considered "unmatched".
+ */
 
 #ifndef FCLA_MATCHER_H
 #define FCLA_MATCHER_H
@@ -11,10 +15,16 @@
 #include <igraph/igraph.h>
 #include <limits>
 #include <algorithm>
+#include <stdexcept>
+#include <utility>
+
 #include "nheap.h"
 #include "helpers.h"
 #include "EdgeGenerator.h"
+#include "TargetExploringEdgeGenerator.h"
 #include "Logger.h"
+#include "exceptions.h"
+#include "Hilbert.h"
 
 /*
  * Template types stand for
@@ -24,21 +34,33 @@ template<typename F, typename W, typename I>
 class Matcher {
 public:
     const W INF_W = std::numeric_limits<W>::max();
+    const W VERY_BIG_W = 1000000; // weight for uncapacitated-case extra node
     //bigraph as two linked lists, storing only non-full edges
     typedef std::pair<I,W> Edge;
     typedef std::forward_list<Edge> Adjlist;
     typedef typename Adjlist::iterator EdgeIterator;
-    std::vector<Adjlist> edges;
+    std::vector<Adjlist> edges; // decreasing order of weights
+    std::vector<std::vector<Edge>> backwards_edges; //for greedy, increasing order
     std::vector<F> node_excess;
+    std::vector<F> full_node_excess;
     std::vector<F> total_matched; //already matched facilities to a customer
     EdgeGenerator* edge_generator;
+    Network* network;
     Logger* logger;
+    bool allow_extra_node_assignment;
+    bool greedyMatching = false;
+    bool hilbert_is_ready = false;
+    std::vector<long> hilbert_order;
+    int greedyMatchingOrder = 0;
+
+    //handle uncapacitated case
+    std::vector<bool> extra_edge_added_per_source;
 
     //global variables (throughout the algorithm)
     std::vector<W> potentials;
     I graph_size;
     newEdges new_edges;
-    I source_count;
+    I source_count; //target count is graph_size-source_count, maybe refactor later
 
     //local variables (preserve only for one iteration)
     std::vector<W> mindist;
@@ -58,21 +80,38 @@ public:
         }
     }
 
+    I inline getExtraNodeIndex() {
+        return this->node_excess.size()-1;
+    }
+
     void reset() {
         total_matched.clear();
         total_matched.resize(source_count, 0);
 
         potentials.resize(graph_size, 0);
         edges.resize(graph_size);
+        backwards_edges.resize(graph_size);
         for (I i = 0; i < graph_size; i++) {
             edges[i].clear();
+            backwards_edges[i].clear();
         }
+
+        extra_edge_added_per_source.clear();
+        extra_edge_added_per_source.resize(source_count, false);
 
         //init with a first nearest neighbor for all source vertices
         edge_generator->reset();
         new_edges.clear();
         for (I i = 0; i < source_count; i++){
             newEdge e = edge_generator->getEdge(i);
+            if (!e.exists && !this->extra_edge_added_per_source[i]) {
+                this->extra_edge_added_per_source[i] = true;
+                e.exists = true;
+                e.weight = VERY_BIG_W;
+                e.source_node = i;
+                e.capacity = 1;
+                e.target_node = getExtraNodeIndex();
+            }
             new_edges.push_back(e);
         }
 
@@ -83,16 +122,16 @@ public:
     //for Facility Location inheritance
     Matcher() {}
 
-    Matcher(EdgeGenerator* edge_generator, std::vector<F>& node_excess, Logger* logger) {
+    Matcher(EdgeGenerator* edge_generator, std::vector<F>& node_excess, Logger* logger, bool allow_extra_node_assignment=true) {
         this->edge_generator = edge_generator;
-        this->graph_size = edge_generator->n + edge_generator->m;
+        this->graph_size = edge_generator->n + edge_generator->m + 1;
         this->source_count = edge_generator->n;
-        /*
-         * This class supports any negative demand for sources and positive demand for targets
-         * Edge generator in its turn also contains number of sources and targets
-         * So consistency should be checks //@todo check consistency
-         */
         this->node_excess = node_excess;
+        this->allow_extra_node_assignment = allow_extra_node_assignment;
+
+        // extra node must have enough excess to serve all nodes, consider multicomponent graph
+        this->node_excess.push_back(std::numeric_limits<long>::max()); // big number goes from the fact that later we can increase demads of customers
+
         this->logger = logger;
         reset();
     }
@@ -202,12 +241,23 @@ public:
         //add a new edge
         edges[new_edge.source_node].push_front(std::make_pair(new_edge.target_node, new_edge.weight));
 
+
         //updating Dijkstra heap by adding source_node to a heap:
         //note, that we don't have to check all outgoing edges, but consideration of the new edge
         //is nothing but a part of dijkstra execution starting from source node,
         //so we do a bit of overhead in order to minimize amount of code
         if (mindist[new_edge.source_node] < INF_W) //otherwise we will have overflow of long when calculating INF+something as new distance
             dheap.updateorenqueue(new_edge.source_node, mindist[new_edge.source_node]);
+    }
+
+    inline newEdge getEdgeToExtraNode(long source_node) {
+        newEdge e;
+        e.exists = true;
+        e.weight = VERY_BIG_W;
+        e.capacity = 1;
+        e.source_node = source_node;
+        e.target_node = getExtraNodeIndex();
+        return e;
     }
 
     /*
@@ -224,14 +274,22 @@ public:
         addNewEdge(new_edges[source_node]);
 
         // update vector with next nearest weights
-        logger->start2("make new edge");
         newEdge next_new_edge = edge_generator->getEdge(source_node);
-        logger->finish2("make new edge");
         new_edges[source_node] = next_new_edge;
         // enqueue the next new value in gheap
         if (next_new_edge.exists) {
             W new_heaped_value = heapedCost(next_new_edge.weight, source_node);
             gheap.enqueue(source_node, new_heaped_value);
+        } else {
+            //if no more edges to enheap - add an edge to extra node for that source node
+            //do it only once per node
+            if (!this->extra_edge_added_per_source[source_node]) {
+                this->extra_edge_added_per_source[source_node] = true;
+                W new_heaped_value = VERY_BIG_W;
+                gheap.enqueue(source_node, new_heaped_value);
+                new_edges[source_node] = getEdgeToExtraNode(source_node);
+            }
+            //else ignore
         }
         return true;
     }
@@ -239,22 +297,18 @@ public:
     /*
      * Run dijkstra and enlarge graph until a valid path to non-full vertex to type B appears
      *
+     * Since there is an extra node, the source node will be matched to at least one as a result
+     *
      * Return false if no path exists
      */
-    bool findAndEnlarge(I* result_vid)
+    long runHeapDijkstraAndEnlargeBGraph()
     {
-        igraph_integer_t target_id = -1;
+        long target_id = -1;
         while (target_id == -1) {
-            //run Dijkstra
-            //log time for dijsktra execution. The sum of all times is important, dynamics can be important too
-            logger->start2("dijkstra");
             target_id = dijkstra();
-            logger->finish2("dijkstra");
-
-            //if current residual graph is full, then return target_id or exception
             if (target_id == -1) {
                 if (!addHeapedEdge()) {
-                    return false;
+                    throw no_more_edges_to_add_exception;
                 }
             } else {
                 W sp_length = mindist[target_id];
@@ -264,8 +318,7 @@ public:
                 }
             }
         }
-        *result_vid = target_id;
-        return true;
+        return target_id;
     }
 
     /*
@@ -354,11 +407,9 @@ public:
     F matchVertex(I source_id)
     {
         if (node_excess[source_id] >= 0)
-            throw "Only nodes with negative excess can be matched";
+            throw std::logic_error("Only nodes with negative excess can be matched");
 
-        logger->start2("iteration init");
         this->iteration_init(source_id);
-        logger->finish2("iteration init");
 
         //nearest_edges array is global, but gheap is local. In order to descrease heap size we enheap
         //only those nodes which were visited by the algorithm (relevant)
@@ -368,31 +419,11 @@ public:
             gheap.enqueue(source_id, heapedCost(new_edges[source_id].weight, source_id));
 
         //enlarge graph until valid path is found, or throw an exception
-        I result_vid;
-
-        logger->start2("find and enlarge");
-
-        if (!findAndEnlarge(&result_vid))
-        {
-            /*
-             * this situation can happen if capacities of all sources are increased by one, but there are less than
-             * <sources> potential facility locations left. So, we have explored literally all the graph. do we?
-             */
-            return 0; //no matching in the graph
-//            throw std::string("No valid matching in the graph, out of additional nodes"); //no path in complete graph
-        }
-
-        logger->finish2("find and enlarge");
-        logger->start2("augment flow");
+        long result_vid = runHeapDijkstraAndEnlargeBGraph();
 
         F flowChange = augmentFlow(result_vid);
-        logger->finish2("augment flow");
-
-        logger->start2("update potentials");
         updatePotentials(result_vid);
-        logger->finish2("update potentials");
 
-//        print_graph<W,F>(&graph, weights, edge_excess);
         return flowChange;
     }
 
@@ -401,7 +432,12 @@ public:
      *
      * No not pass bipartite &graph, but a function that provides incremental edges
      */
-    void run() {
+    void match() {
+        if (this->greedyMatching) {
+            this->matchGreedy();
+            return;
+        }
+
         I source_id = 0;
         I prev_id = -1;
         //round-robin
@@ -409,6 +445,7 @@ public:
         while (source_id != prev_id) {
             while (node_excess[source_id] < 0) { //match source_id while there is any negative excess
                 matchVertex(source_id);
+//                print_edgelist();
 //                if (matchVertex(source_id) == 0) {
 //                    throw "Unfeasible problem: not enough facilities/customers";
 //                }
@@ -418,35 +455,231 @@ public:
         }
     }
 
+    std::vector<long> matchGreedy() {
+        // take some order of customers, assign to the nearest available facility, return result
+        logger->start("greedyMatching");
+        std::vector<long> source_ids(this->edge_generator->n);
+        for (long i = 0; i < source_ids.size(); i++) {
+            source_ids[i] = i;
+        }
+        std::vector<long> explored_sources;
+        switch (this->greedyMatchingOrder) {
+            case 2: this->makeHilbertSourceOrder(source_ids); break;
+            case 3: this->makeDistanceSourceOrder(source_ids); break;
+            default:
+                this->makeRandomSourceOrder(source_ids);
+                break;
+        }
+        for (auto it = source_ids.begin(); it != source_ids.end(); it++) {
+            if (!this->matchToClosestAvailableFacility(*it)) {
+                explored_sources.push_back((*it));
+            }
+        }
+        logger->finish("greedyMatching");
+        return explored_sources;
+    }
+
+    void makeRandomSourceOrder(std::vector<long>& sources) {
+        std::random_shuffle(sources.begin(), sources.end());
+    }
+
+    struct Customer {
+        Coords coords;
+        long index;
+    };
+
+    struct ComparatorHilbertEntry
+    {
+        bool operator()(const Customer& r1, const Customer& r2)
+        {
+            double d1[2],d2[2];
+            d1[0] = r1.coords.first;
+            d1[1] = r1.coords.second;
+            d2[0] = r2.coords.first;
+            d2[1] = r2.coords.second;
+            return hilbert_ieee_cmp(2,d1,d2) >= 0;
+        }
+    } hilbert_comparator;
+
+    void makeHilbertSourceOrder(std::vector<long>& sources) {
+        if (this->hilbert_is_ready) {
+            sources = this->hilbert_order;
+            return;
+        }
+        std::vector<Customer> customers;
+        for (auto s : sources) {
+            Coords coords = this->getCustomerCoords(s);
+            customers.push_back({coords, s});
+        }
+        std::cout << "begin hilbert" << std::endl;
+        std::sort(customers.begin(), customers.end(), hilbert_comparator);
+        for (long i = 0; i < sources.size(); i++) {
+            sources[i] = customers[i].index;
+        }
+        this->hilbert_order = sources;
+        this->hilbert_is_ready = true;
+        std::cout << "hilbert ready" << std::endl;
+    }
+
+    Coords getCustomerCoords(long source_id) {
+        return Coords(this->network->coords[network->source_indexes[source_id]].first, this->network->coords[network->source_indexes[source_id]].second);
+    }
+
+    void makeDistanceSourceOrder(std::vector<long>& sources) {
+        //distance to the nearest available facility
+
+        //zip with distances
+        std::vector<std::pair<long, long>> zipped_sources;
+        for (auto s : sources) {
+            zipped_sources.push_back(std::make_pair(this->getDistanceToClosestAvailableFacility(s), s));
+        }
+
+        std::sort(zipped_sources.begin(), zipped_sources.end());
+        for (long i = 0; i < sources.size(); i++) {
+            sources[i] = zipped_sources[i].second;
+        }
+    }
+
+    long getDistanceToClosestAvailableFacility(long source_id) {
+        for (auto edge : this->backwards_edges[source_id]) {
+            if (!this->ifTargetCapacitated(edge.first)) {
+                return edge.second;
+            }
+        }
+        return VERY_BIG_W;
+    }
+
+    bool matchToClosestAvailableFacility(long source_id) {
+        if (this->node_excess[source_id] == 0) {
+            return true;
+        }
+        auto it = backwards_edges[source_id].begin();
+        W weight;
+        long target_node;
+        long closestFacility = 0;
+        while (this->node_excess[source_id] < 0) {
+            while (it == backwards_edges[source_id].end() || this->ifTargetCapacitated(it->first)) {
+                closestFacility++;
+                if (it == backwards_edges[source_id].end()) {
+                    newEdge new_edge = this->edge_generator->getEdge(source_id);
+                    if (!new_edge.exists) {
+                        logger->add(std::string("furthest traversal ") + std::to_string(source_id), -1);
+                        return false;
+                    }
+                    edges[source_id].push_front(std::make_pair(new_edge.target_node, new_edge.weight));
+                    backwards_edges[source_id].push_back(std::make_pair(new_edge.target_node, new_edge.weight));
+                    it = std::prev(backwards_edges[source_id].end());
+                } else {
+                    it++;
+                }
+            }
+            weight = -it->second;
+            target_node = it->first;
+            edges[target_node].push_front(std::make_pair(source_id,weight));
+            node_excess[source_id]++;
+            node_excess[target_node]--;
+
+            it++; // because we can not match twice with the same facility
+        }
+        logger->add(std::string("furthest traversal ") + std::to_string(source_id), closestFacility);
+        return true;
+    }
+
+
+
     /*
      * Increase the demand of a particular customer
      */
     F increaseCapacity(I vid) {
         //if current vid is already has demand equal to every possible facility - ignore
         if (total_matched[vid] >= this->edge_generator->m) {
-            return -1;
+            return 0;
         }
 
         //only one value per call because only one matchvertexroutine is called, that can change flow value on max 1 value
         //in bipartite graph
         this->node_excess[vid] -= 1;
+
+        if (this->greedyMatching) {
+            this->full_node_excess[vid] -= 1;
+            return 1;
+        }
+
         //before capacity was changed, all excesses were zero. Then, one changed
         //As a result of matchVertex routine, no any other vertex can loose its matching
         //because any path is "continuous"
-        int result = matchVertex(vid);
+        int result;
+        try {
+            result = matchVertex(vid);
+        } catch (NoMoreEdgesToAdd& e) {
+            /*
+             * this is allowed here, because there is only one extra node, but customers are allowed to be matched
+             * with each facility only once,so some customers may need more extra nodes
+             */
+            result = 0;
+        }
         if (result == 0) {
             this->node_excess[vid] += 1; //do not match this node ever
         }
         return result;
     }
 
-    void calculateResult() { //@todo remove result matching from everywhere
+    inline bool ifAllSourceMatchedExactlyOnce() {
+        std::vector<bool> is_matched(this->edge_generator->n, false);
+        for (long i = this->edge_generator->n; i < this->edge_generator->n + this->edge_generator->m; i++) {
+            for (auto e : this->edges[i]) {
+                if (is_matched[e.first]) {
+                    return false;
+                }
+                is_matched[e.first] = true;
+            }
+        }
+        this->logger->add("checked if all matched", "yes");
+        //check if any of sources were not matched to any of facilities, hence matched to an extra node
+//        for(auto const& outedge: edges[getExtraNodeIndex()]) {
+//            return false;
+//        }
+        return true;
+    }
+
+    void calculateResult() {
+        //check if there are some nodes that are matched to an excess node. if so - throw exception
+        //however the matching is valid
+        if (!allow_extra_node_assignment && !ifAllSourceMatchedExactlyOnce()) {
+            throw std::logic_error("WMA produced infesible solution");
+        }
+
         //arrange an answer
         result_weight = 0;
-        for (I i = source_count; i < graph_size; i++) {
+        for (I i = source_count; i < graph_size-1; i++) { //one goes for an extra node
             for (EdgeIterator it = edges[i].begin(); it != edges[i].end(); it++) {
                 result_weight += abs(it->second);
             }
+        }
+    }
+
+    bool ifTargetCapacitated(long target_id) {
+        assert(target_id >= this->edge_generator->n && target_id < this->node_excess.size());
+        return this->node_excess[target_id] == 0;
+    }
+
+    inline long get_bi_node_id_by_target_id(long target_id) {
+        return target_id + this->source_count;
+    }
+
+    inline long get_bi_outdegree(long bi_node_id) {
+        long i = 0;
+        for (auto &x : this->edges[bi_node_id]) i++;
+        return i;
+    }
+
+    void print_edgelist() {
+        for (long i = 0; i < this->edges.size(); i++) {
+            std::cout << i << ": ";
+            for (auto it = this->edges[i].begin(); it != this->edges[i].end(); it++) {
+                std::cout << "(" << it->first << "," << it->second << "), ";
+            }
+            std::cout << std::endl;
         }
     }
 

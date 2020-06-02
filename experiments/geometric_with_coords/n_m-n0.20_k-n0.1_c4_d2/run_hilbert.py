@@ -41,4 +41,4 @@ for f in os.listdir(path.join(data_path,'geometric_with_coords',expdir)):
     p.wait()
     out, err = p.communicate()
     if len(out) + len(err) > 0:
-	print(out, err)
+        print(out, err)

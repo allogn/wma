@@ -12,6 +12,7 @@
 #include <iostream>
 #include <fstream>
 #include <time.h>
+#include "exceptions.h"
 
 class Network {
 public:
@@ -66,6 +67,15 @@ public:
         igraph_destroy(&this->graph);
     }
 
+    long graph_size() {
+        igraph_integer_t vcount = igraph_vcount(&this->graph);
+        return static_cast<long>(vcount);
+    }
+
+    long number_of_customers() {
+        return source_indexes.size();
+    }
+
     void save(std::string dir, std::string filename) {
         std::ofstream outf(filename,std::ios::out);
         outf << this->id << " "
@@ -94,7 +104,7 @@ public:
     void load(std::string filename, std::string target_list_filename = "") {
         std::ifstream infile(filename, std::ios::in);
         if (!infile) {
-            throw std::string("Input file does not exist");
+            throw std::invalid_argument("Input file does not exist");
         }
         long vcount, ecount, source_num;
         infile >> this->id >> vcount >> ecount >> source_num;
@@ -111,6 +121,16 @@ public:
             weights.push_back(weight);
         }
         igraph_add_edges(&this->graph, &edges, 0);
+
+        igraph_bool_t check_multiple;
+        igraph_has_multiple(&this->graph, &check_multiple);
+        if (check_multiple) {
+            std::cout << "Graph has multiple edges" << std::endl; //@todo move this
+            //is not allowed because in facility choser when covering is checked
+            //we assume that every outgoing edge from a facility covers one unique new customer
+            exit(1);
+        }
+
         source_indexes.clear();
         source_indexes.reserve(source_num);
         for (long i = 0; i < source_num; i++) {
@@ -134,19 +154,20 @@ public:
 //            }
 //        }
         igraph_vector_destroy(&edges);
-
+        target_indexes.clear();
+        target_capacities.clear();
         if (target_list_filename != "") {
-	    std::ifstream target_list_file(target_list_filename.c_str());
+	        std::ifstream target_list_file(target_list_filename.c_str());
            //@todo wtf check for a file does not work 
             long nodeid, capacity;
-	    while (target_list_file >> nodeid >> capacity) {
+            while (target_list_file >> nodeid >> capacity) {
                 target_indexes.push_back(nodeid);
                 target_capacities.push_back(capacity);
             }
-	    if (target_capacities.size() == 0) {
-		std::cout << "Error file with potential facilities is empty" << std::endl;
-		//throw std::string("File with potential facilities is empty");
-	    }
+            if (target_capacities.size() == 0) {
+                std::cout << "Error file with potential facilities is empty" << std::endl;
+                //throw std::string("File with potential facilities is empty");
+	        }
         } else {
             target_indexes.clear();
             for (long i = 0; i < vcount; i++) {
@@ -154,6 +175,19 @@ public:
             }
             target_capacities.clear();
         }
+    }
+
+    void set_target_indexes(std::vector<long> node_indexes, std::vector<long> capacities) {
+        if (capacities.size() != node_indexes.size()) {
+            std::length_error("Capacities for nodes should have the same length as potential facility locations.");
+        }
+        this->target_capacities = capacities;
+        this->target_indexes = node_indexes;
+    }
+
+    void set_target_indexes(std::vector<long> node_indexes, long capacities) {
+        this->target_capacities = std::vector<long>(node_indexes.size(), capacities);
+        this->target_indexes = node_indexes;
     }
 };
 

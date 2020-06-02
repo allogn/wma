@@ -27,7 +27,8 @@ for f in os.listdir(path.join(data_path,'clustered',expdir)):
         edges = int(params[2])
         vertices = int(params[1])
         sources = int(params[3])
-
+    if vertices <= 9000: 
+        continue
     facilities = int(sources/10)
     capacity = 20
 

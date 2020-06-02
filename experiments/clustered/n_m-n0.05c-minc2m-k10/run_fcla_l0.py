@@ -30,12 +30,12 @@ for f in os.listdir(path.join(data_path,'clustered',expdir)):
 
     facilities = int(sources/10)
     capacity = 20
+    print("facilities " + str(facilities))
 
     p = subprocess.Popen([path.join(root_path,'bin','fcla'),'-i',
 			  full_target_path,
 			  '-c',str(capacity),
 			  '-n',str(facilities),
-                          '-g','0',
 			  '-o',path.join(data_path,'clustered',expdir,'solutions','fcla_l0',id + "fac" + str(facilities) + ".json")],
 			  stdout=subprocess.PIPE,
 			  stderr=subprocess.PIPE)
