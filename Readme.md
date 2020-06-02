@@ -2,6 +2,10 @@
 
 Algorithm for large-scale approximate capacitated facility location. Locates a set of facilities inside a road network, minimizing the sum of distances from each customer to the nearest available facility.
 
+Codebase of the publication
+
+A. Logins, P. Karras, C. S. Jensen, "Multicapacity Facility Selection in Networks", In Proceedings of the 35th IEEE International Conference on Data Engineering (ICDE 2019), Macao, Macao SAR, April 2019, pp. 794–805. ([pdf](https://alogins.net/assets/pdf/wma_icde2019.pdf))
+
 ## Dependencies
 
 - https://github.com/scrosby/OSM-binary and Google Protobuf (see C++ docs in github) for OSM parsing (osmtontw), can be swiched off by passing a parameter -DOSM to cmake
